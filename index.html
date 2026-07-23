@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>IndexOne — The Category-Adaptive Directory</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <!-- ===================== TOPBAR ===================== -->
+    <header class="topbar">
+      <div class="wrap">
+        <a class="brand" href="#/"
+          ><span class="brand-mark"
+            ><svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#fff"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5l-8-3Z"
+              /></svg
+          ></span>
+          IndexOne</a
+        >
+        <div class="hero-search">
+          <input
+            id="hero-search-input"
+            type="text"
+            placeholder='Try "Reddington", "payments", or "maternity"…'
+            aria-label="Search the directory"
+          />
+          <button class="btn btn-primary" id="hero-search-btn">Search</button>
+        </div>
+        <div class="topbar-right">
+          <button class="btn btn-ghost">Sign In</button>
+          <button class="btn btn-primary">List your product</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ===================== DIRECTORY VIEW ===================== -->
+    <main id="view-directory" class="view is-active">
+      <section class="hero">
+        <span class="hero-eyebrow eyebrow"
+          ><span class="dot"></span> Release v2026.05 · Pilot region:
+          Nigeria</span
+        >
+        <div class="wrap hero-inner">
+          <h1>
+            Discover the products
+            <span class="grad-text">building the next wave.</span>
+          </h1>
+          <p class="sub">
+            A directory of verified companies and institutions shaping the ecosystem across fintech, commerce, health, and talent — every profile adapts to what you're browsing, from fintech funding rounds to hospital accreditation, all backed by real data.
+          </p>
+          <div class="hero-stats" id="hero-stats"></div>
+        </div>
+      </section>
+
+      <div class="directory-shell">
+        <div class="wrap">
+          <div class="section-head">
+            <div>
+              <span class="eyebrow">§ 01 / Explore the directory</span>
+              <h2>Browse verified entities</h2>
+            </div>
+          </div>
+
+          <!-- category tabs -->
+          <div class="cat-tabs" id="cat-tabs"></div>
+
+          <!-- filters -->
+          <div class="filter-bar">
+            <div class="filter-row">
+              <div class="filter-group">
+                <span class="filter-label">Region</span>
+                <select class="control" id="f-region"></select>
+              </div>
+              <div class="filter-group">
+                <span class="filter-label" id="subcat-label">Sub-type</span>
+                <select class="control" id="f-subcat"></select>
+              </div>
+              <div class="filter-group">
+                <span class="filter-label">Status</span>
+                <select class="control" id="f-status">
+                  <option value="all">All</option>
+                  <option value="verified">Verified only</option>
+                  <option value="unverified">Unverified</option>
+                </select>
+              </div>
+              <div class="filter-group">
+                <span class="filter-label">Sort</span>
+                <select class="control" id="f-sort"></select>
+              </div>
+              <button class="clear-btn" id="clear-filters">Clear all</button>
+            </div>
+            <div class="filter-row" id="feat-row">
+              <span class="filter-label" id="feat-label">Features</span>
+              <div class="feat-chips" id="feat-chips"></div>
+            </div>
+          </div>
+
+          <div class="result-meta">
+            <span class="result-count" id="result-count"></span>
+          </div>
+
+          <!-- adaptive table + card fallback -->
+          <div class="table-wrap" id="table-wrap">
+            <table class="dir">
+              <thead id="dir-head"></thead>
+              <tbody id="dir-body"></tbody>
+            </table>
+          </div>
+          <div class="card-list" id="card-list"></div>
+          <div id="empty-slot"></div>
+
+          <!-- deliverable roadmap -->
+          <div class="roadmap">
+            <span class="eyebrow"
+              >§ 02 / Build roadmap · from the project scope</span
+            >
+            <div class="roadmap-grid">
+              <div class="rm done">
+                <div class="num">D1 · D5</div>
+                <div class="t">
+                  Schema & taxonomy <span class="badge">✓ in this build</span>
+                </div>
+                <div class="s">
+                  Base + per-category fields, region/category/tag trees.
+                </div>
+              </div>
+              <div class="rm done">
+                <div class="num">D3 · D4</div>
+                <div class="t">
+                  Table + detail UI <span class="badge">✓ in this build</span>
+                </div>
+                <div class="s">
+                  Category-adaptive columns and profile sections.
+                </div>
+              </div>
+              <div class="rm">
+                <div class="num">D6 · D7</div>
+                <div class="t">Architecture & CMS</div>
+                <div class="s">
+                  Postgres + JSON fields, admin form driven by
+                  field_definitions.
+                </div>
+              </div>
+              <div class="rm">
+                <div class="num">D8</div>
+                <div class="t">Search & filter build</div>
+                <div class="s">
+                  Full-text + multi-filter over thousands of rows.
+                </div>
+              </div>
+              <div class="rm">
+                <div class="num">D9 · D10</div>
+                <div class="t">Sourcing & MVP launch</div>
+                <div class="s">
+                  Seed Hospitals-in-Nigeria pilot, QA on real data.
+                </div>
+              </div>
+            </div>
+            <p class="proto-note" id="proto-note"></p>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ===================== DETAIL VIEW ===================== -->
+    <main id="view-detail" class="view">
+      <div class="detail-wrap" id="detail-root"></div>
+    </main>
+
+  
+  </body>
+</html>
