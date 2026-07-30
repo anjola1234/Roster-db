@@ -1,0 +1,214 @@
+// IndexOne data schema
+// Real relational model backing the directory (replaces the old static JS mock data).
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Taxonomy: Industry is self-relational so it covers both the two top-level
+// verticals (Fintech, Healthcare) AND their sub-verticals (Payments, Lending,
+// General, Specialist, ...) in one table. A Company always points at a leaf
+// (sub-vertical) Industry row; the vertical is reached via `parent`.
+// ---------------------------------------------------------------------------
+model Industry {
+  id        String     @id @default(cuid())
+  slug      String     @unique
+  name      String
+  icon      String?
+  accent    String?
+  parentId  String?
+  parent    Industry?  @relation("IndustryChildren", fields: [parentId], references: [id])
+  children  Industry[] @relation("IndustryChildren")
+  companies Company[]
+  features  Feature[]
+
+  @@index([parentId])
+}
+
+// Feature / specialty tag taxonomy, scoped to a top-level vertical.
+model Feature {
+  id         String    @id @default(cuid())
+  slug       String    @unique
+  name       String
+  group      String
+  industryId String
+  industry   Industry  @relation(fields: [industryId], references: [id])
+  companies  Company[] @relation("CompanyFeatures")
+
+  @@index([industryId])
+}
+
+// Nigerian states (pilot region set).
+model Region {
+  id        String          @id @default(cuid())
+  slug      String          @unique
+  name      String
+  companies CompanyRegion[]
+}
+
+model CompanyRegion {
+  id        String   @id @default(cuid())
+  companyId String
+  regionId  String
+  isPrimary Boolean  @default(false)
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  region    Region   @relation(fields: [regionId], references: [id])
+
+  @@unique([companyId, regionId])
+  @@index([regionId])
+}
+
+model Investor {
+  id          String            @id @default(cuid())
+  slug        String            @unique
+  name        String
+  type        String
+  investments CompanyInvestor[]
+}
+
+model CompanyInvestor {
+  id             String        @id @default(cuid())
+  companyId      String
+  investorId     String
+  fundingRoundId String?
+  company        Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  investor       Investor      @relation(fields: [investorId], references: [id])
+  fundingRound   FundingRound? @relation(fields: [fundingRoundId], references: [id])
+
+  @@unique([companyId, investorId, fundingRoundId])
+  @@index([investorId])
+}
+
+model FundingRound {
+  id          String            @id @default(cuid())
+  companyId   String
+  round       String
+  date        String
+  amount      Float?
+  leadInvestor String?
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  investors   CompanyInvestor[]
+
+  @@index([companyId])
+}
+
+model Person {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  role      String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([companyId])
+}
+
+model Review {
+  id          String   @id @default(cuid())
+  companyId   String
+  authorName  String
+  authorRole  String
+  rating      Int
+  title       String
+  body        String
+  createdAt   DateTime @default(now())
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+}
+
+model Company {
+  id                String   @id @default(cuid())
+  slug              String   @unique
+  name              String
+  logoInitials      String
+  logoColor         String
+  industryId        String
+  industry          Industry @relation(fields: [industryId], references: [id])
+  shortDescription  String
+  longDescription   String
+  website            String
+  heroImageId        String?
+  socials             Json?
+
+  foundingYear        Int?
+  employeeRange        String?
+  businessModel        String?
+  regulator            String?
+
+  status               String   @default("active")
+  verification         String   @default("unverified") // verified | unverified | flagged
+  source               String?
+  lastVerifiedAt       DateTime?
+  submittedByEmail     String?
+
+  ratingScore          Float?
+  ratingCount          Int      @default(0)
+  ratingDist           Json?
+
+  // ---- fintech-specific (nullable for non-fintech rows) ----
+  totalFunding         Float?
+  valuation            Float?
+  valuationDate        String?
+  licenses             Json?
+
+  // ---- hospital-specific (nullable for non-hospital rows) ----
+  hospitalType         String?
+  ownership            String?
+  yearEstablished      Int?
+  bedCapacity          Int?
+  emergency            Boolean?
+  city                 String?
+  address              String?
+  services             Json?
+  accreditation        Json?
+  accreditationBody    String?
+  facilityBody         String?
+  facilityNo           String?
+  contactPhone         String?
+  contactEmail         String?
+
+  createdAt            DateTime @default(now())
+
+  regions       CompanyRegion[]
+  tags          Feature[]         @relation("CompanyFeatures")
+  investors     CompanyInvestor[]
+  fundingRounds FundingRound[]
+  people        Person[]
+  reviews       Review[]
+
+  @@index([industryId])
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime  @default(now())
+  sessions     Session[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model NewsletterSubscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+}
