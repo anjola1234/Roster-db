@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCompanyBySlug, getRelatedCompanies, type CompanyFull } from "@/lib/queries";
-import { heroImageUrl, money, formatDate } from "@/lib/format";
+import { heroImageUrl, money, formatDate, timeAgo } from "@/lib/format";
 import ScrollSpyToc from "@/components/ScrollSpyToc";
 import ReviewForm from "@/components/ReviewForm";
+import ActivityBadge from "@/components/ActivityBadge";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
@@ -273,6 +274,33 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
                 <div className="kv-row">
                   <span className="kv-key">Socials</span>
                   <span className="kv-val">{socialIcons(company.socials)}</span>
+                </div>
+              </div>
+
+              <div className="activity-cards">
+                <div className="activity-card">
+                  <p className="eyebrow">Website activity</p>
+                  <div style={{ margin: "10px 0" }}>
+                    <ActivityBadge company={company} size="lg" />
+                  </div>
+                  <p className="ent-sub">
+                    {company.websiteLastCheckedAt
+                      ? `Last verified: ${timeAgo(company.websiteLastCheckedAt)}`
+                      : "Not yet checked."}
+                  </p>
+                </div>
+                <div className="activity-card">
+                  <p className="eyebrow">Social activity</p>
+                  <div style={{ margin: "10px 0" }}>
+                    <span className="activity-badge lg act-darkgray">
+                      <span className="act-line">
+                        <span className="act-dot">⚫</span> Not yet monitored
+                      </span>
+                    </span>
+                  </div>
+                  <p className="ent-sub">
+                    Social media monitoring (LinkedIn, X, Instagram, YouTube) is not yet wired up for any company.
+                  </p>
                 </div>
               </div>
             </section>

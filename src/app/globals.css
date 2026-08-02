@@ -17,6 +17,14 @@
   --emerald-soft: #e7f9f1;
   --amber: #f59e0b;
   --amber-soft: #fef3e2;
+  --orange: #ea580c;
+  --orange-soft: #fdece1;
+  --red: #dc2626;
+  --red-soft: #fce8e8;
+  --blue: #2563eb;
+  --blue-soft: #e6edfd;
+  --slate: #6b7280;
+  --slate-soft: #eceef2;
   --grad-brand: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
   --grad-brand-hover: linear-gradient(135deg, #4338ca 0%, #6d28d9 100%);
   --grad-text: linear-gradient(135deg, #4f46e5 0%, #7c3aed 60%, #a78bfa 100%);
@@ -209,6 +217,113 @@ button {
 .verified-badge {
   color: var(--emerald);
   font-size: 13px;
+}
+
+/* ---------- activity badge (company lifecycle / computed activity score) ---------- */
+.activity-badge {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 96px;
+}
+.activity-badge .act-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.activity-badge .act-dot {
+  font-size: 9px;
+  line-height: 1;
+}
+.activity-badge .act-pct {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--ink);
+}
+.activity-badge .act-bar {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-alt);
+  overflow: hidden;
+  width: 84px;
+}
+.activity-badge .act-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+}
+.activity-badge.lg {
+  min-width: 0;
+  gap: 8px;
+}
+.activity-badge.lg .act-line {
+  font-size: 16px;
+}
+.activity-badge.lg .act-bar {
+  width: 160px;
+  height: 6px;
+}
+.act-green .act-line,
+.act-green .act-pct {
+  color: var(--emerald);
+}
+.act-green .act-bar > span {
+  background: var(--emerald);
+}
+.act-amber .act-line,
+.act-amber .act-pct {
+  color: var(--amber);
+}
+.act-amber .act-bar > span {
+  background: var(--amber);
+}
+.act-orange .act-line,
+.act-orange .act-pct {
+  color: var(--orange);
+}
+.act-orange .act-bar > span {
+  background: var(--orange);
+}
+.act-gray .act-line,
+.act-gray .act-pct {
+  color: var(--slate);
+}
+.act-gray .act-bar > span {
+  background: var(--slate);
+}
+.act-red .act-line {
+  color: var(--red);
+}
+.act-purple .act-line {
+  color: var(--violet);
+}
+.act-blue .act-line {
+  color: var(--blue);
+}
+.act-darkgray .act-line {
+  color: var(--ink-soft);
+}
+.activity-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--s-4);
+  margin-top: var(--s-5);
+}
+.activity-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--s-5);
+  box-shadow: var(--shadow-sm);
+}
+@media (max-width: 700px) {
+  .activity-cards {
+    grid-template-columns: 1fr;
+  }
 }
 .panel {
   background: var(--surface);

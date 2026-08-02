@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import ActivityBadge from "@/components/ActivityBadge";
 
 type Industry = { id: string; slug: string; name: string; children: { id: string; slug: string; name: string }[] };
 type Region = { id: string; slug: string; name: string };
@@ -13,6 +14,9 @@ type PreviewRow = {
   logoColor: string;
   verification: string;
   shortDescription: string;
+  lifecycleStatus: string;
+  activityScore: number | null;
+  activityLabel: string | null;
   industry: { name: string; parent: { name: string; slug: string } | null };
   regions: { isPrimary: boolean; region: { name: string } }[];
 };
@@ -123,6 +127,7 @@ export default function DirectoryPreview({ industries, regions }: { industries: 
               <th>Description</th>
               <th>Region</th>
               <th>Status</th>
+              <th>Activity</th>
               <th></th>
             </tr>
           </thead>
@@ -156,6 +161,9 @@ export default function DirectoryPreview({ industries, regions }: { industries: 
                     </span>
                   </td>
                   <td>{verifyPill(l.verification)}</td>
+                  <td>
+                    <ActivityBadge company={l} />
+                  </td>
                   <td style={{ textAlign: "right" }}>
                     <Link className="explore-link" href={`/company/${l.slug}`}>
                       Explore deeper →
@@ -166,7 +174,7 @@ export default function DirectoryPreview({ industries, regions }: { industries: 
             })}
             {!loading && rows && rows.length === 0 && (
               <tr>
-                <td colSpan={6}>
+                <td colSpan={7}>
                   <div className="empty">
                     <div className="ico">◍</div>
                     <h3>No listings match those filters</h3>

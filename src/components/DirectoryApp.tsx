@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { money } from "@/lib/format";
+import ActivityBadge from "@/components/ActivityBadge";
 
 type Industry = { id: string; slug: string; name: string; icon: string | null; accent: string | null; children: { id: string; slug: string; name: string }[] };
 type Region = { id: string; slug: string; name: string };
@@ -18,6 +19,9 @@ type CompanyRow = {
   verification: string;
   website: string;
   socials: Record<string, string> | null;
+  lifecycleStatus: string;
+  activityScore: number | null;
+  activityLabel: string | null;
   totalFunding: number | null;
   bedCapacity: number | null;
   foundingYear: number | null;
@@ -320,6 +324,10 @@ export default function DirectoryApp({
                     <span className="k">Status</span>
                     {verifyPill(l.verification)}
                   </div>
+                  <div className="row-kv">
+                    <span className="k">Activity</span>
+                    <ActivityBadge company={l} />
+                  </div>
                   <div style={{ marginTop: 12, textAlign: "right" }}>
                     <span className="explore-link">Explore deeper →</span>
                   </div>
@@ -349,6 +357,7 @@ function columnDefsFor(category: string): ColDef[] {
       { key: "funding", label: "Capital Raised" },
       { key: "investors", label: "Investors" },
       { key: "region", label: "Region" },
+      { key: "activity", label: "Activity" },
       { key: "socials", label: "Socials" },
       { key: "explore", label: "" },
     ];
@@ -360,6 +369,7 @@ function columnDefsFor(category: string): ColDef[] {
       { key: "description", label: "Description" },
       { key: "specialties", label: "Specialties" },
       { key: "licence", label: "Reg. / Licence" },
+      { key: "activity", label: "Activity" },
       { key: "explore", label: "" },
     ];
   }
@@ -369,6 +379,7 @@ function columnDefsFor(category: string): ColDef[] {
     { key: "description", label: "Description" },
     { key: "region", label: "Region" },
     { key: "status", label: "Status" },
+    { key: "activity", label: "Activity" },
     { key: "explore", label: "" },
   ];
 }
@@ -445,6 +456,12 @@ function Cell({ col, l, rl }: { col: string; l: CompanyRow; rl: { name: string; 
       return <td>{socialIcons(l.socials)}</td>;
     case "status":
       return <td>{verifyPill(l.verification)}</td>;
+    case "activity":
+      return (
+        <td>
+          <ActivityBadge company={l} />
+        </td>
+      );
     case "specialties": {
       const shown = l.tags.slice(0, 2);
       return (
