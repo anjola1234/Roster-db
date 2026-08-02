@@ -177,14 +177,45 @@ model Company {
 
   createdAt            DateTime @default(now())
 
+  // ---- company activity (lifecycle status + computed activity score) ----
+  // lifecycleStatus is an editorial fact set by a human ("operating" | "closed" |
+  // "acquired" | "merged" | "unverified") — mirrors the plain-string convention
+  // already used above for `status`/`verification` rather than a Prisma enum.
+  lifecycleStatus      String    @default("unverified")
+  activityScore        Int?
+  activityLabel        String? // "growing" | "active" | "low_activity" | "at_risk" | "dormant"
+  activityScorePrev    Int?
+  websiteStatus        String? // "reachable" | "unreachable" | "parked" | "error"
+  websiteLastCheckedAt DateTime?
+  websiteLastChangedAt DateTime?
+  websiteContentHash   String?
+  socialStatus         String    @default("not_monitored")
+  socialLastPostAt     DateTime?
+
   regions       CompanyRegion[]
   tags          Feature[]         @relation("CompanyFeatures")
   investors     CompanyInvestor[]
   fundingRounds FundingRound[]
   people        Person[]
   reviews       Review[]
+  activityChecks ActivityCheck[]
 
   @@index([industryId])
+}
+
+// Append-only history of real website-reachability checks used to compute a
+// Company's activityScore. See src/lib/activityCheck.ts for the heuristic.
+model ActivityCheck {
+  id         String   @id @default(cuid())
+  companyId  String
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  source     String // "website" (only source implemented right now)
+  result     String // "reachable" | "unreachable" | "parked" | "error"
+  httpStatus Int?
+  detail     String?
+  checkedAt  DateTime @default(now())
+
+  @@index([companyId, checkedAt])
 }
 
 model User {
