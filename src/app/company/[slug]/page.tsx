@@ -7,8 +7,13 @@ import ScrollSpyToc from "@/components/ScrollSpyToc";
 import ReviewForm from "@/components/ReviewForm";
 import ActivityBadge from "@/components/ActivityBadge";
 
+<<<<<<< HEAD
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+  const { slug } = params;
+=======
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
+>>>>>>> 99446befe3ec647e523327d0d5e985768982921d
   const company = await getCompanyBySlug(slug);
   if (!company) return { title: "Not found — IndexOne" };
   return { title: `${company.name} — IndexOne`, description: company.shortDescription };
@@ -56,8 +61,13 @@ function bestForBlock(company: CompanyFull) {
   };
 }
 
+<<<<<<< HEAD
+export default async function CompanyDetailPage({ params }: { params: { slug: string } }) {
+  const { slug } = params;
+=======
 export default async function CompanyDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+>>>>>>> 99446befe3ec647e523327d0d5e985768982921d
   const company = await getCompanyBySlug(slug);
   if (!company) notFound();
 
