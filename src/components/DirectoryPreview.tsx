@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import ActivityBadge from "@/components/ActivityBadge";
+import SectorIcon, { kindForCategory } from "@/components/SectorIcon";
 
 type Industry = { id: string; slug: string; name: string; children: { id: string; slug: string; name: string }[] };
 type Region = { id: string; slug: string; name: string };
@@ -21,6 +22,15 @@ type PreviewRow = {
   regions: { isPrimary: boolean; region: { name: string } }[];
 };
 
+// A single tab in the sector rail. `vertical`/`sub` are the filter values it
+// applies; `sub` is null for a top-level vertical (or the "all" tab).
+type RailTab = {
+  id: string;
+  label: string;
+  vertical: string;
+  sub: string | null;
+};
+
 function verifyPill(v: string) {
   if (v === "verified") return <span className="pill emerald">● Verified</span>;
   if (v === "flagged") return <span className="pill amber">⚑ Flagged</span>;
@@ -29,25 +39,80 @@ function verifyPill(v: string) {
 
 export default function DirectoryPreview({ industries, regions }: { industries: Industry[]; regions: Region[] }) {
   const [vertical, setVertical] = useState("all");
+  const [subVertical, setSubVertical] = useState("all");
   const [region, setRegion] = useState("all");
   const [status, setStatus] = useState("all");
   const [rows, setRows] = useState<PreviewRow[] | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const subOptions = useMemo(() => {
-    if (vertical === "all") return [];
-    return industries.find((i) => i.slug === vertical)?.children ?? [];
-  }, [vertical, industries]);
+  // ---- Build the sector rail from REAL industry data -----------------------
+  // "All Sectors" + every top-level vertical + every sub-vertical, flattened
+  // into one horizontal row of tabs. Nothing here is invented — it mirrors what
+  // is actually in the directory, so the rail grows automatically as verticals
+  // are added.
+  const railTabs = useMemo<RailTab[]>(() => {
+    const tabs: RailTab[] = [{ id: "all", label: "All Sectors", vertical: "all", sub: null }];
+    for (const v of industries) {
+      tabs.push({ id: `v:${v.slug}`, label: v.name, vertical: v.slug, sub: null });
+      for (const c of v.children) {
+        tabs.push({ id: `s:${c.slug}`, label: c.name, vertical: v.slug, sub: c.slug });
+      }
+    }
+    return tabs;
+  }, [industries]);
 
-  const [subVertical, setSubVertical] = useState("all");
+  const activeTabId = useMemo(() => {
+    if (vertical === "all") return "all";
+    if (subVertical !== "all") return `s:${subVertical}`;
+    return `v:${vertical}`;
+  }, [vertical, subVertical]);
 
-  // Changing the vertical also resets the dependent sub-vertical filter.
-  // Done inside the event handler (not an effect) so it's a single render.
-  function selectVertical(next: string) {
-    setVertical(next);
-    setSubVertical("all");
+  function selectTab(tab: RailTab) {
+    setVertical(tab.vertical);
+    setSubVertical(tab.sub ?? "all");
   }
 
+  // ---- Rail scroll behaviour ----------------------------------------------
+  // Vertical wheel/trackpad gestures translate to horizontal scroll so the rail
+  // is usable with a mouse; touch/native horizontal scroll is untouched. Edge
+  // fades are toggled by class so they only show when content overflows.
+  const railRef = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ start: false, end: false });
+
+  function updateEdges() {
+    const el = railRef.current;
+    if (!el) return;
+    const start = el.scrollLeft > 4;
+    const end = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+    setEdges((prev) => (prev.start === start && prev.end === end ? prev : { start, end }));
+  }
+
+  useEffect(() => {
+    updateEdges();
+    const onResize = () => updateEdges();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [railTabs]);
+
+  function onRailWheel(e: React.WheelEvent<HTMLDivElement>) {
+    const el = railRef.current;
+    if (!el) return;
+    // Only hijack predominantly-vertical gestures; leave real horizontal
+    // trackpad swipes to scroll natively.
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      el.scrollLeft += e.deltaY;
+    }
+  }
+
+  // Keep the active tab in view when it changes (e.g. picking a deep sub-vertical).
+  useEffect(() => {
+    const el = railRef.current;
+    if (!el) return;
+    const active = el.querySelector<HTMLElement>('[data-active="true"]');
+    active?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+  }, [activeTabId]);
+
+  // ---- Data fetch (unchanged contract with /api/companies) -----------------
   useEffect(() => {
     const params = new URLSearchParams();
     if (subVertical !== "all") params.set("industry", subVertical);
@@ -57,8 +122,7 @@ export default function DirectoryPreview({ industries, regions }: { industries: 
     params.set("limit", "10");
 
     // Standard fetch-in-effect loading pattern: setLoading(true) fires
-    // synchronously so the UI shows a loading state immediately, before the
-    // async request resolves.
+    // synchronously so the UI shows a loading state immediately.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     fetch(`/api/companies?${params.toString()}`)
@@ -68,54 +132,76 @@ export default function DirectoryPreview({ industries, regions }: { industries: 
       .finally(() => setLoading(false));
   }, [vertical, subVertical, region, status]);
 
+  const secondaryActive = region !== "all" || status !== "all";
+
   return (
     <div>
-      <div className="filter-bar">
-        <div className="filter-row">
-          <div className="filter-group">
-            <span className="filter-label">Industry</span>
-            <select className="control" value={vertical} onChange={(e) => selectVertical(e.target.value)}>
-              <option value="all">All industries</option>
-              {industries.map((i) => (
-                <option key={i.slug} value={i.slug}>
-                  {i.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          {vertical !== "all" && (
-            <div className="filter-group">
-              <span className="filter-label">Type</span>
-              <select className="control" value={subVertical} onChange={(e) => setSubVertical(e.target.value)}>
-                <option value="all">All types</option>
-                {subOptions.map((s) => (
-                  <option key={s.slug} value={s.slug}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-          <div className="filter-group">
-            <span className="filter-label">Region</span>
-            <select className="control" value={region} onChange={(e) => setRegion(e.target.value)}>
-              <option value="all">All regions</option>
-              {regions.map((r) => (
-                <option key={r.slug} value={r.slug}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="filter-group">
-            <span className="filter-label">Status</span>
-            <select className="control" value={status} onChange={(e) => setStatus(e.target.value)}>
-              <option value="all">All</option>
-              <option value="verified">Verified only</option>
-              <option value="unverified">Unverified</option>
-            </select>
-          </div>
+      {/* -- Sector rail: the primary "browse by sector" control ------------- */}
+      <div className={`category-rail ${edges.start ? "fade-start" : ""} ${edges.end ? "fade-end" : ""}`}>
+        <div
+          ref={railRef}
+          className="category-track"
+          role="tablist"
+          aria-label="Browse by sector"
+          onWheel={onRailWheel}
+          onScroll={updateEdges}
+        >
+          {railTabs.map((tab) => {
+            const isActive = tab.id === activeTabId;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                data-active={isActive}
+                className={`sector-chip ${isActive ? "is-active" : ""} ${tab.sub ? "is-sub" : ""}`}
+                onClick={() => selectTab(tab)}
+              >
+                <SectorIcon kind={kindForCategory(tab.label)} />
+                <span className="sector-label">{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
+      </div>
+
+      {/* -- Secondary filters: deliberately lightweight -------------------- */}
+      <div className="dir-filters">
+        <div className="filter-group">
+          <span className="filter-label">Region</span>
+          <select className="control" value={region} onChange={(e) => setRegion(e.target.value)}>
+            <option value="all">All regions</option>
+            {regions.map((r) => (
+              <option key={r.slug} value={r.slug}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="filter-group">
+          <span className="filter-label">Status</span>
+          <select className="control" value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="all">All</option>
+            <option value="verified">Verified only</option>
+            <option value="unverified">Unverified</option>
+          </select>
+        </div>
+        {secondaryActive && (
+          <button
+            type="button"
+            className="filter-clear"
+            onClick={() => {
+              setRegion("all");
+              setStatus("all");
+            }}
+          >
+            Clear filters
+          </button>
+        )}
+        <span className="filter-count" aria-live="polite">
+          {loading ? "Loading…" : `Top ${rows?.length ?? 0} across the ecosystem`}
+        </span>
       </div>
 
       <div className="table-wrap">
@@ -146,7 +232,9 @@ export default function DirectoryPreview({ industries, regions }: { industries: 
                         <div className="ent-name">
                           {l.name} {l.verification === "verified" && <span className="verified-badge">✔</span>}
                         </div>
-                        <div className="ent-sub">{l.industry.parent?.name ?? l.industry.name} · {l.industry.name}</div>
+                        <div className="ent-sub">
+                          {l.industry.parent?.name ?? l.industry.name} · {l.industry.name}
+                        </div>
                       </div>
                     </div>
                   </td>
@@ -178,6 +266,7 @@ export default function DirectoryPreview({ industries, regions }: { industries: 
                   <div className="empty">
                     <div className="ico">◍</div>
                     <h3>No listings match those filters</h3>
+                    <p>Try another sector, or clear the region and status filters.</p>
                   </div>
                 </td>
               </tr>
