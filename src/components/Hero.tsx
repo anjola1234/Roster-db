@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 type Fragment = {
   name: string;
   logoInitials: string;
@@ -62,6 +64,15 @@ export default function Hero({ fragments }: { fragments: Fragment[] }) {
           One directory for the companies and institutions shaping the ecosystem. Every profile adapts to what
           you&rsquo;re browsing, from fintech funding rounds to hospital accreditation.
         </p>
+        <div className="hero-cta">
+          <Link className="btn btn-primary btn-lg" href="/directory">
+            Explore the ecosystem →
+          </Link>
+          <Link className="btn btn-secondary btn-lg" href="#platform">
+            See how it works
+          </Link>
+        </div>
+        <p className="hero-trust">Built for builders, investors and researchers across the Nigerian ecosystem.</p>
       </div>
     </section>
   );
