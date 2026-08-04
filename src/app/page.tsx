@@ -77,7 +77,7 @@ export default async function Home() {
         <div className="wrap">
           <div className="section-head">
             <span className="eyebrow">§ 03 / What you can do here</span>
-            <h2>What the platform does.</h2>
+            <h2>What you can do on the platform.</h2>
           </div>
           <WhatPlatformDoes />
         </div>
@@ -88,7 +88,7 @@ export default async function Home() {
         <div className="wrap">
           <div className="section-head">
             <span className="eyebrow">§ 04 / From the ecosystem</span>
-            <h2>What people are saying.</h2>
+            <h2>Real experiences from the ecosystem.</h2>
             <p>Real reviews from customers, patients and operators across the directory.</p>
           </div>
           <ReviewDeck reviews={reviewRows} />
