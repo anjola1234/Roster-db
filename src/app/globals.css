@@ -2202,3 +2202,366 @@ section.blk > .eyebrow {
     transition: none;
   }
 }
+
+/* =========================================================================
+   Ecosystem · editorial data wall  (replaces the fixed-height flip cards
+   that rendered as large empty boxes). Content-sized masonry with varied
+   card scales and small iconographic motifs. Real counts only.
+   ========================================================================= */
+
+.stat-wall {
+  columns: 3 240px;
+  column-gap: var(--s-5);
+}
+@media (max-width: 900px) {
+  .stat-wall {
+    columns: 2 220px;
+  }
+}
+@media (max-width: 560px) {
+  .stat-wall {
+    columns: 1;
+  }
+}
+
+.swall-card {
+  break-inside: avoid;
+  margin-bottom: var(--s-5);
+  position: relative;
+}
+
+.swall-surface {
+  all: unset;
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  cursor: pointer;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--s-6);
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.18s var(--ease), box-shadow 0.18s var(--ease), transform 0.18s var(--ease);
+}
+.swall-surface:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+.swall-surface:focus-visible {
+  outline: 2px solid var(--indigo);
+  outline-offset: 2px;
+}
+
+.swall-viz {
+  display: flex;
+  align-items: flex-start;
+  height: 40px;
+  margin-bottom: var(--s-4);
+  color: var(--faint);
+}
+.swall-viz .viz {
+  width: 44px;
+  height: 40px;
+}
+.swall-viz .viz circle,
+.swall-viz .viz path {
+  fill: currentColor;
+}
+.swall-viz .viz.viz-stroke {
+  color: var(--indigo);
+  opacity: 0.55;
+}
+.swall-viz .viz.viz-stroke path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.swall-viz .viz-star {
+  color: var(--amber);
+  width: 34px;
+}
+.swall-viz .viz .pin {
+  fill: var(--indigo);
+}
+.swall-viz .viz .pin-dot {
+  fill: var(--surface);
+}
+.swall-card.is-companies .swall-viz,
+.swall-card.is-lg .swall-viz {
+  color: var(--indigo);
+  opacity: 0.7;
+}
+
+/* chip + avatar motifs */
+.viz-tags {
+  display: inline-flex;
+  gap: 5px;
+}
+.viz-tags span {
+  width: 20px;
+  height: 10px;
+  border-radius: 3px;
+  background: rgba(79, 70, 229, 0.16);
+}
+.viz-tags span:nth-child(2) {
+  width: 14px;
+  background: rgba(124, 58, 237, 0.16);
+}
+.viz-tags span:nth-child(3) {
+  width: 24px;
+}
+.viz-avatars {
+  display: inline-flex;
+}
+.viz-avatars span {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--surface-alt);
+  border: 2px solid var(--surface);
+  margin-left: -6px;
+}
+.viz-avatars span:first-child {
+  margin-left: 0;
+  background: rgba(79, 70, 229, 0.2);
+}
+.viz-avatars span:nth-child(2) {
+  background: rgba(124, 58, 237, 0.18);
+}
+
+.swall-num {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--ink);
+}
+.swall-suffix {
+  font-size: 0.5em;
+  color: var(--muted);
+  margin-left: 2px;
+}
+.swall-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 8px;
+}
+.swall-hint {
+  font-size: 12.5px;
+  color: var(--faint);
+  margin-top: 4px;
+}
+
+/* size scales — this is what creates the editorial variation */
+.swall-card.is-lg .swall-num {
+  font-size: 52px;
+}
+.swall-card.is-lg .swall-surface {
+  padding: var(--s-8) var(--s-6);
+}
+.swall-card.is-md .swall-num {
+  font-size: 40px;
+}
+.swall-card.is-sm .swall-num {
+  font-size: 32px;
+}
+.swall-card.is-sm .swall-viz {
+  height: 32px;
+  margin-bottom: var(--s-3);
+}
+
+/* reveal-on-expand supporting copy */
+.swall-more {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.35s var(--ease), opacity 0.3s var(--ease), margin-top 0.35s var(--ease);
+}
+.swall-more p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+.swall-card.is-open .swall-more {
+  max-height: 200px;
+  opacity: 1;
+  margin-top: var(--s-4);
+}
+
+.swall-cta {
+  display: inline-flex;
+  align-items: center;
+  margin-top: var(--s-3);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  transition: color 0.18s var(--ease);
+}
+.swall-card:hover .swall-cta,
+.swall-card.is-open .swall-cta {
+  color: var(--indigo);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .swall-surface,
+  .swall-more,
+  .swall-cta {
+    transition: none;
+  }
+}
+
+/* =========================================================================
+   Hero CTAs + platform journey  (added: hero was missing its action buttons;
+   the platform section is now a numbered Discover->Participate journey.)
+   ========================================================================= */
+
+.hero-cta {
+  display: flex;
+  gap: var(--s-3);
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: var(--s-8);
+}
+.btn.btn-lg {
+  padding: 13px 24px;
+  font-size: 15px;
+}
+.hero-trust {
+  margin: var(--s-6) 0 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+/* ---- platform journey ---- */
+.journey-rail {
+  display: flex;
+  gap: var(--s-6);
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--s-8);
+}
+.journey-tab {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 2px var(--s-4);
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  transition: border-color 0.18s var(--ease);
+}
+.journey-tab:focus-visible {
+  outline: 2px solid var(--indigo);
+  outline-offset: 3px;
+}
+.journey-n {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--faint);
+  transition: color 0.18s var(--ease);
+}
+.journey-t {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 17px;
+  color: var(--muted);
+  transition: color 0.18s var(--ease);
+}
+.journey-tab:hover .journey-t {
+  color: var(--ink-soft);
+}
+.journey-tab.is-active {
+  border-bottom-color: var(--indigo);
+}
+.journey-tab.is-active .journey-n {
+  color: var(--indigo);
+}
+.journey-tab.is-active .journey-t {
+  color: var(--ink);
+}
+
+.journey-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
+  gap: var(--s-8);
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--s-10);
+  box-shadow: var(--shadow-sm);
+}
+@media (max-width: 720px) {
+  .journey-panel {
+    grid-template-columns: 1fr;
+    gap: var(--s-5);
+    padding: var(--s-6);
+  }
+}
+.journey-index {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(80px, 12vw, 140px);
+  line-height: 0.9;
+  letter-spacing: -0.04em;
+  background: var(--grad-text);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  opacity: 0.9;
+}
+@media (max-width: 720px) {
+  .journey-index {
+    font-size: 64px;
+  }
+}
+.journey-detail h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 26px;
+  letter-spacing: -0.02em;
+  margin: 0 0 var(--s-3);
+  color: var(--ink);
+}
+.journey-detail-n {
+  color: var(--indigo);
+}
+.journey-detail p {
+  margin: 0 0 var(--s-5);
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  max-width: 52ch;
+}
+.journey-caps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: var(--s-6);
+}
+.journey-cap {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  background: var(--surface-alt);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  padding: 5px 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .journey-tab,
+  .journey-n,
+  .journey-t {
+    transition: none;
+  }
+}
