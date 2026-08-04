@@ -12,90 +12,104 @@ type ReviewRow = {
   company: { name: string; slug: string; logoInitials: string; logoColor: string };
 };
 
-function Stars({ rating }: { rating: number }) {
-  return (
-    <span className="rv-stars" aria-label={`${rating} out of 5`}>
-      {Array.from({ length: 5 }).map((_, i) => (
-        <svg key={i} viewBox="0 0 24 24" width="14" height="14" className={i < rating ? "on" : "off"} aria-hidden="true">
-          <path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.9 6.6 19.7l1.2-6-4.5-4.2 6.1-.7z" />
-        </svg>
-      ))}
-      <span className="rv-score">{rating.toFixed(1)}</span>
-    </span>
-  );
+function stars(n: number) {
+  return "★★★★★".slice(0, n) + "☆☆☆☆☆".slice(0, 5 - n);
 }
 
-function initials(name: string) {
-  return name
-    .split(" ")
-    .map((p) => p[0])
-    .slice(0, 2)
-    .join("");
-}
+const VISIBLE_DEPTH = 4;
 
 export default function ReviewDeck({ reviews }: { reviews: ReviewRow[] }) {
-  const [active, setActive] = useState(0);
+  const [order, setOrder] = useState<number[]>(reviews.map((_, i) => i));
 
   if (reviews.length === 0) {
-    return <p style={{ color: "var(--muted)" }}>No reviews yet — be the first to share an experience.</p>;
+    return <p style={{ color: "var(--muted)" }}>No reviews yet.</p>;
   }
 
-  const featured = reviews[active];
-  const step = (dir: number) => setActive((a) => (a + dir + reviews.length) % reviews.length);
+  function cycle() {
+    setOrder((prev) => {
+      const [first, ...rest] = prev;
+      return [...rest, first];
+    });
+  }
+
+  const current = reviews[order[0]];
 
   return (
-    <div className="reviews-row">
-      <div className="reviews-strip-wrap">
-        <button className="rv-arrow" aria-label="Previous review" onClick={() => step(-1)} type="button">
-          ‹
-        </button>
-        <div className="reviews-strip" role="list">
-          {reviews.map((r, i) => (
-            <button
-              key={r.id}
-              type="button"
-              role="listitem"
-              className={`rv-card ${i === active ? "is-active" : ""}`}
-              onClick={() => setActive(i)}
-            >
-              <Stars rating={r.rating} />
-              <div className="rv-card-name">{r.authorName}</div>
-              <p className="rv-card-body">{r.body}</p>
-              <div className="rv-card-meta">
-                <span className="rv-avatar sm" style={{ background: r.company.logoColor }}>
-                  {r.company.logoInitials}
-                </span>
-                <span className="rv-card-role">{r.authorRole}</span>
-              </div>
-            </button>
-          ))}
+    <div className="reviews-layout">
+      <div>
+        <div className="deck">
+          {order
+            .slice(0, VISIBLE_DEPTH)
+            .map((idx, depth) => {
+              const r = reviews[idx];
+              const isFront = depth === 0;
+              const offset = depth * 10;
+              const scale = 1 - depth * 0.035;
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  className="deck-card"
+                  style={{
+                    zIndex: VISIBLE_DEPTH - depth,
+                    transform: `translateY(${offset}px) scale(${scale})`,
+                    opacity: 1 - depth * 0.15,
+                    cursor: isFront ? "pointer" : "default",
+                    pointerEvents: isFront ? "auto" : "none",
+                  }}
+                  onClick={isFront ? cycle : undefined}
+                  aria-label={isFront ? `Reviewing ${r.company.name}. Activate to see the next review.` : undefined}
+                  tabIndex={isFront ? 0 : -1}
+                >
+                  <span className="stars" aria-hidden="true">
+                    {stars(r.rating)}
+                  </span>
+                  <p className="body-preview">&ldquo;{r.body}&rdquo;</p>
+                  <div className="who">
+                    <span className="avatar" style={{ background: r.company.logoColor }}>
+                      {r.company.logoInitials}
+                    </span>
+                    <span>
+                      <span className="name">{r.authorName}</span>
+                      <br />
+                      <span className="role">on {r.company.name}</span>
+                    </span>
+                  </div>
+                </button>
+              );
+            })
+            .reverse()}
         </div>
+        <p className="deck-hint">Tap the top card to see the next review · {reviews.length} total</p>
       </div>
 
-      <div className="rv-featured" aria-live="polite">
-        <div className="rv-featured-head">
-          <span className="rv-avatar" style={{ background: featured.company.logoColor }}>
-            {initials(featured.authorName)}
+      <div className="review-detail" aria-live="polite">
+        <div className="co-line">
+          <span className="co-logo" style={{ background: current.company.logoColor }}>
+            {current.company.logoInitials}
           </span>
-          <div className="rv-featured-who">
-            <span className="rv-featured-name">{featured.authorName}</span>
-            <span className="rv-featured-role">{featured.authorRole}</span>
-          </div>
-          <Stars rating={featured.rating} />
+          <span className="eyebrow">{current.company.name}</span>
         </div>
-        <h3 className="rv-featured-title">{featured.title}</h3>
-        <p className="rv-featured-body">{featured.body}</p>
-        <div className="rv-chips">
-          <span className="rv-chip">First-hand review</span>
-          <span className="rv-chip">on {featured.company.name}</span>
-        </div>
-        <div className="rv-featured-foot">
-          <span className="rv-count">
-            {active + 1} / {reviews.length}
+        <span className="stars">{stars(current.rating)}</span>
+        <h3>{current.title}</h3>
+        <p className="body">{current.body}</p>
+        <div className="who">
+          <span className="avatar" style={{ background: current.company.logoColor }}>
+            {current.authorName
+              .split(" ")
+              .map((p) => p[0])
+              .slice(0, 2)
+              .join("")}
           </span>
-          <button className="rv-arrow solid" aria-label="Next review" onClick={() => step(1)} type="button">
-            ›
-          </button>
+          <span>
+            <span className="name" style={{ fontWeight: 600 }}>
+              {current.authorName}
+            </span>
+            <br />
+            <span className="role" style={{ color: "var(--muted)", fontSize: 12.5 }}>
+              {current.authorRole}
+            </span>
+          </span>
         </div>
       </div>
     </div>
