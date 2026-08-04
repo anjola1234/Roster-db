@@ -2565,3 +2565,89 @@ section.blk > .eyebrow {
     transition: none;
   }
 }
+
+/* =========================================================================
+   "Unlock the full power" — dark conversion band (five icon columns).
+   Matches the mockup's structure; palette stays indigo/violet on ink.
+   ========================================================================= */
+
+.cta-band {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) 1fr;
+  gap: var(--s-12);
+  align-items: center;
+  background: linear-gradient(135deg, #1e1b3a 0%, #12142b 58%);
+  border-radius: var(--radius-lg);
+  padding: var(--s-12) var(--s-10);
+  color: #fff;
+  overflow: hidden;
+}
+@media (max-width: 860px) {
+  .cta-band {
+    grid-template-columns: 1fr;
+    gap: var(--s-8);
+    padding: var(--s-8);
+  }
+}
+
+.cta-band-head h2 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(26px, 3.4vw, 34px);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  margin: 0 0 var(--s-4);
+  color: #fff;
+}
+.cta-band-head p {
+  margin: 0 0 var(--s-6);
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.68);
+  max-width: 40ch;
+}
+.cta-band-actions {
+  display: flex;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+.btn.btn-ghost-light {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  color: #fff;
+}
+.btn.btn-ghost-light:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.cta-cols {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--s-6);
+}
+@media (max-width: 860px) {
+  .cta-cols {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s-5);
+  }
+}
+.cta-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.cta-col .ico {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  background: rgba(124, 58, 237, 0.22);
+  color: #cabffb;
+}
+.cta-col-label {
+  font-size: 13px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.82);
+}
