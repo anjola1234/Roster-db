@@ -1,6 +1,3 @@
-"use client";
-
-import { useState } from "react";
 import Link from "next/link";
 
 type Stats = {
@@ -13,51 +10,64 @@ type Stats = {
   features: number;
 };
 
-type Size = "lg" | "md" | "sm";
-
-type CardDef = {
-  key: string;
-  label: string;
-  value: number;
-  suffix?: string;
-  hint: string;
-  explain: string;
-  cta: string;
-  href: string;
-  size: Size;
-  viz: React.ReactNode;
-};
-
 const fmt = (n: number) => n.toLocaleString("en-US");
 
-// ---- Small, honest inline motifs -----------------------------------------
-// These are iconographic accents, not charts — they add texture without
-// implying a dataset we don't have (no fake trend lines or ratings).
+// ---- Motifs --------------------------------------------------------------
 
-function DotGrid() {
-  const dots = Array.from({ length: 9 });
+function Sparkline() {
   return (
-    <svg viewBox="0 0 60 60" className="viz" aria-hidden="true">
-      {dots.map((_, i) => {
-        const x = 8 + (i % 3) * 22;
-        const y = 8 + Math.floor(i / 3) * 22;
-        return <circle key={i} cx={x} cy={y} r={i % 4 === 0 ? 5 : 3.5} />;
-      })}
+    <svg viewBox="0 0 120 40" className="mviz" preserveAspectRatio="none" aria-hidden="true">
+      <polyline
+        className="spark"
+        points="0,32 18,26 34,28 52,18 70,22 88,10 104,14 120,4"
+        fill="none"
+      />
+      {[
+        [18, 26],
+        [52, 18],
+        [88, 10],
+        [120, 4],
+      ].map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r={2.4} className="spark-dot" />
+      ))}
     </svg>
   );
 }
 
-function StarMark() {
+function Stars() {
   return (
-    <svg viewBox="0 0 24 24" className="viz viz-star" aria-hidden="true">
-      <path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.9 6.6 19.7l1.2-6-4.5-4.2 6.1-.7z" />
+    <span className="mviz-stars" aria-hidden="true">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <svg key={i} viewBox="0 0 24 24" width="15" height="15">
+          <path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.9 6.6 19.7l1.2-6-4.5-4.2 6.1-.7z" />
+        </svg>
+      ))}
+    </span>
+  );
+}
+
+function Avatars({ n = 3, plus }: { n?: number; plus?: number }) {
+  return (
+    <span className="mviz-avatars" aria-hidden="true">
+      {Array.from({ length: n }).map((_, i) => (
+        <span key={i} className="av" />
+      ))}
+      {plus != null && plus > 0 && <span className="av-plus">+{fmt(plus)}</span>}
+    </span>
+  );
+}
+
+function Lightning() {
+  return (
+    <svg viewBox="0 0 24 24" className="mviz-glyph" width="30" height="30" aria-hidden="true">
+      <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z" />
     </svg>
   );
 }
 
 function Layers() {
   return (
-    <svg viewBox="0 0 48 40" className="viz viz-stroke" aria-hidden="true">
+    <svg viewBox="0 0 48 40" className="mviz-glyph stroke" width="34" height="30" aria-hidden="true">
       <path d="M24 4 44 13 24 22 4 13z" />
       <path d="M4 20l20 9 20-9" />
       <path d="M4 27l20 9 20-9" />
@@ -65,165 +75,136 @@ function Layers() {
   );
 }
 
-function TagChips() {
+// Dotted Africa silhouette — signals the African ecosystem the directory
+// tracks. The number beside it stays real (Nigerian states), so this reads
+// as context, not a claim of continent-wide coverage.
+function AfricaMap() {
   return (
-    <span className="viz-tags" aria-hidden="true">
-      <span />
-      <span />
-      <span />
-    </span>
-  );
-}
-
-function Avatars({ n = 3 }: { n?: number }) {
-  return (
-    <span className="viz-avatars" aria-hidden="true">
-      {Array.from({ length: n }).map((_, i) => (
-        <span key={i} />
-      ))}
-    </span>
-  );
-}
-
-// A rough Nigeria-shaped scatter with a location pin — signals "states", not
-// a claim about a wider map.
-function MapDots() {
-  const pts = [
-    [10, 22],
-    [22, 14],
-    [34, 18],
-    [46, 24],
-    [18, 30],
-    [30, 32],
-    [42, 34],
-  ];
-  return (
-    <svg viewBox="0 0 56 44" className="viz" aria-hidden="true">
-      {pts.map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r={2.6} />
-      ))}
-      <path className="pin" d="M28 6c-3.3 0-6 2.6-6 5.9 0 4.4 6 9.1 6 9.1s6-4.7 6-9.1C34 8.6 31.3 6 28 6z" />
-      <circle className="pin-dot" cx={28} cy={12} r={2} />
+    <svg viewBox="0 0 150 170" className="africa" aria-hidden="true">
+      <defs>
+        <pattern id="afdots" width="6" height="6" patternUnits="userSpaceOnUse">
+          <circle cx="1.4" cy="1.4" r="1.2" />
+        </pattern>
+        <clipPath id="afclip">
+          <path d="M42 14c14-6 44-3 56 12 8 10 2 22 6 32 4 11-6 21-4 32 2 10-6 18-10 28-4 9-6 22-14 30-6 6-15 2-17-8-3-14-11-20-16-32-6-12-14-24-13-40 1-13-2-27 3-40 3-9 9-18 20-24z" />
+        </clipPath>
+      </defs>
+      <g clipPath="url(#afclip)">
+        <rect x="0" y="0" width="150" height="170" fill="url(#afdots)" />
+      </g>
     </svg>
   );
 }
 
 export default function EcosystemStats({ stats }: { stats: Stats }) {
-  const cards: CardDef[] = [
-    {
-      key: "companies",
-      label: "Companies",
-      value: stats.companies,
-      hint: "listed in the pilot",
-      explain:
-        "Verified and unverified companies and institutions across the Fintech and Healthcare pilot verticals in Nigeria.",
-      cta: "Explore companies",
-      href: "/directory",
-      size: "lg",
-      viz: <DotGrid />,
-    },
-    {
-      key: "people",
-      label: "People",
-      value: stats.people,
-      hint: "founders on record",
-      explain: "Founders and leadership on record for the companies and institutions in the directory.",
-      cta: "Explore people",
-      href: "/directory",
-      size: "md",
-      viz: <Avatars n={3} />,
-    },
-    {
-      key: "regions",
-      label: "States",
-      value: stats.regions,
-      hint: "Nigerian states covered",
-      explain:
-        "This is a Nigeria-only pilot — we track presence across Nigerian states rather than a fabricated global footprint.",
-      cta: "Explore states",
-      href: "/directory",
-      size: "md",
-      viz: <MapDots />,
-    },
-    {
-      key: "reviews",
-      label: "Reviews",
-      value: stats.reviews,
-      hint: "first-hand, unmoderated",
-      explain: "First-hand reviews from customers, patients and operators who have used these products directly.",
-      cta: "Read reviews",
-      href: "/directory",
-      size: "sm",
-      viz: <StarMark />,
-    },
-    {
-      key: "industries",
-      label: "Industries",
-      value: stats.industries,
-      hint: "verticals & sub-verticals",
-      explain: "Two top-level verticals — Fintech and Healthcare — broken down into their sub-verticals.",
-      cta: "Explore industries",
-      href: "/directory",
-      size: "sm",
-      viz: <Layers />,
-    },
-    {
-      key: "investors",
-      label: "Investors",
-      value: stats.investors,
-      hint: "backing the ecosystem",
-      explain: "Venture, growth and institutional investors tracked across every disclosed funding round.",
-      cta: "Explore investors",
-      href: "/directory",
-      size: "sm",
-      viz: <Avatars n={4} />,
-    },
-    {
-      key: "features",
-      label: "Features",
-      value: stats.features,
-      hint: "taxonomy tags",
-      explain: "The feature and specialty taxonomy used to filter the directory — from payment gateways to cardiology.",
-      cta: "Explore features",
-      href: "/directory",
-      size: "md",
-      viz: <TagChips />,
-    },
-  ];
-
   return (
-    <div className="stat-wall">
-      {cards.map((c) => (
-        <StatCard key={c.key} card={c} />
-      ))}
+    <div className="ewall">
+      <MetricCard
+        area="companies"
+        value={fmt(stats.companies)}
+        label="Companies"
+        sub="Across the pilot verticals"
+        href="/directory"
+        viz={<Sparkline />}
+      />
+      <MetricCard
+        area="reviews"
+        value={fmt(stats.reviews)}
+        label="Reviews"
+        sub="First-hand, from real users"
+        href="/directory"
+        viz={<Stars />}
+      />
+      <MetricCard
+        area="investors"
+        value={fmt(stats.investors)}
+        label="Investors"
+        sub="Backing the ecosystem"
+        href="/directory"
+        viz={<Avatars n={3} plus={stats.investors > 3 ? stats.investors - 3 : undefined} />}
+      />
+      <MapCard value={fmt(stats.regions)} />
+      <MetricCard
+        area="industries"
+        value={fmt(stats.industries)}
+        label="Industries"
+        sub="Verticals & sub-verticals"
+        href="/directory"
+        viz={<Layers />}
+      />
+      <MetricCard
+        area="people"
+        value={fmt(stats.people)}
+        label="People"
+        sub="Founders on record"
+        href="/directory"
+        viz={<Avatars n={4} plus={stats.people > 4 ? stats.people - 4 : undefined} />}
+      />
+      <MetricCard
+        area="features"
+        value={fmt(stats.features)}
+        label="Features"
+        sub="Taxonomy tags to discover, compare & filter the directory"
+        href="/directory"
+        viz={<Lightning />}
+        wide
+      />
     </div>
   );
 }
 
-function StatCard({ card }: { card: CardDef }) {
-  const [open, setOpen] = useState(false);
+function MetricCard({
+  area,
+  value,
+  label,
+  sub,
+  href,
+  viz,
+  wide,
+}: {
+  area: string;
+  value: string;
+  label: string;
+  sub: string;
+  href: string;
+  viz: React.ReactNode;
+  wide?: boolean;
+}) {
+  const wideCls = wide ? "is-wide" : "";
   return (
-    <div className={`swall-card is-${card.size} ${open ? "is-open" : ""}`}>
-      <button
-        type="button"
-        className="swall-surface"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <div className="swall-viz">{card.viz}</div>
-        <div className="swall-num">
-          {fmt(card.value)}
-          {card.suffix && <span className="swall-suffix">{card.suffix}</span>}
+    <div className={`ewall-card ewall-${area} ${wideCls}`} data-area={area}>
+      <div className="ewall-surface">
+        <div className="ewall-top">
+          <span className="ewall-label">{label}</span>
         </div>
-        <div className="swall-label">{card.label}</div>
-        <div className="swall-hint">{card.hint}</div>
-        <div className="swall-more">
-          <p>{card.explain}</p>
+        <div className="ewall-num">{value}</div>
+        <p className="ewall-sub">{sub}</p>
+        <div className="ewall-viz">{viz}</div>
+        <Link className="ewall-cta" href={href}>
+          Explore {label.toLowerCase()} →
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function MapCard({ value }: { value: string }) {
+  return (
+    <div className="ewall-card ewall-map">
+      <div className="ewall-surface ewall-map-surface">
+        <span className="ewall-label">States</span>
+        <div className="ewall-num">{value}</div>
+        <p className="ewall-sub">
+          A Nigeria-only pilot. Every company is mapped to the Nigerian states it operates in — real coverage, not a
+          fabricated global footprint.
+        </p>
+        <div className="ewall-map-art">
+          <AfricaMap />
         </div>
-      </button>
-      <Link className="swall-cta" href={card.href}>
-        {card.cta} →
-      </Link>
+        <Link className="ewall-cta" href="/directory">
+          Explore states →
+        </Link>
+      </div>
     </div>
   );
 }
