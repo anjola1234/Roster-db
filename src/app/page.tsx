@@ -16,7 +16,7 @@ import {
 export default async function Home() {
   const [stats, fragments, industries, regions, reviews] = await Promise.all([
     getEcosystemStats(),
-    getHeroFragments(),
+    getHeroFragments(40),
     getIndustries(),
     getRegions(),
     getReviewDeck(),
