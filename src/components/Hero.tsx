@@ -4,20 +4,69 @@ type Fragment = {
   name: string;
   logoInitials: string;
   logoColor: string;
+  logoUrl?: string | null; // optional real logo; falls back to the initials swatch
   industry: { name: string; parent: { name: string } | null };
 };
 
-const POSITIONS = [
-  { top: "2%", left: "30%" },
-  { top: "6%", left: "66%" },
-  { top: "30%", left: "4%" },
-  { top: "38%", left: "40%" },
-  { top: "34%", left: "76%" },
-  { top: "68%", left: "12%" },
-  { top: "72%", left: "46%" },
-];
-
 const TRUSTED = ["Google for Startups", "aws", "goodie", "foodie", "Techpoint", "norrsken"];
+
+const WALL_COLS = 5;
+const WALL_MIN = 40; // tile real companies up to this many entries for density
+// Per-column drift speeds (seconds) — different speeds read as parallax.
+const COL_SPEED = [46, 38, 52, 34, 44];
+
+function tile(items: Fragment[], min: number): Fragment[] {
+  if (items.length === 0) return [];
+  const out: Fragment[] = [];
+  while (out.length < min) out.push(...items);
+  return out.slice(0, Math.max(min, items.length));
+}
+
+function chunk<T>(arr: T[], cols: number): T[][] {
+  const out: T[][] = Array.from({ length: cols }, () => []);
+  arr.forEach((item, i) => out[i % cols].push(item));
+  return out;
+}
+
+function WallItem({ f }: { f: Fragment }) {
+  return (
+    <div className="hx-wall-item">
+      {f.logoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img className="hx-wall-img" src={f.logoUrl} alt="" width={30} height={30} />
+      ) : (
+        <span className="hx-wall-sw" style={{ background: f.logoColor }}>
+          {f.logoInitials}
+        </span>
+      )}
+      <span className="hx-wall-name">{f.name}</span>
+    </div>
+  );
+}
+
+function EcosystemWall({ fragments }: { fragments: Fragment[] }) {
+  const pool = tile(fragments, WALL_MIN);
+  if (pool.length === 0) return null;
+  const columns = chunk(pool, WALL_COLS);
+  return (
+    <div className="hx-wall" aria-hidden="true">
+      <div className="hx-wall-rot">
+        {columns.map((col, ci) => (
+          <div
+            key={ci}
+            className="hx-wall-col"
+            style={{ animationDuration: `${COL_SPEED[ci % COL_SPEED.length]}s` }}
+          >
+            {/* duplicated once so the vertical drift loops seamlessly */}
+            {[...col, ...col].map((f, i) => (
+              <WallItem key={ci + "-" + i} f={f} />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function AfricaDots({ className }: { className?: string }) {
   return (
@@ -46,11 +95,12 @@ export default function Hero({
   investorCount?: number;
   stateCount?: number;
 }) {
-  const cards = fragments.slice(0, POSITIONS.length);
   const invExtra = investorCount > 4 ? investorCount - 4 : 0;
 
   return (
     <section className="hx">
+      <EcosystemWall fragments={fragments} />
+
       <div className="wrap hx-in">
         <div className="hx-copy">
           <h1 className="hx-title">
@@ -79,23 +129,6 @@ export default function Hero({
         </div>
 
         <div className="hx-stage" aria-hidden="true">
-          {cards.map((f, i) => {
-            const pos = POSITIONS[i];
-            return (
-              <div key={f.name + i} className="hx-card" style={{ top: pos.top, left: pos.left }}>
-                <div className="hx-card-h">
-                  <span className="hx-sw" style={{ background: f.logoColor }}>
-                    {f.logoInitials}
-                  </span>
-                  <span>
-                    <span className="hx-cn">{f.name}</span>
-                    <span className="hx-cc">{f.industry.parent?.name ?? f.industry.name} · {f.industry.name}</span>
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-
           <div className="hx-ctry">
             <div className="hx-ctry-num">{stateCount}</div>
             <div className="hx-ctry-lab">Nigerian states covered</div>
