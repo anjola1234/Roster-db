@@ -8,12 +8,12 @@ type Fragment = {
   industry: { name: string; parent: { name: string } | null };
 };
 
-const TRUSTED = ["Google for Startups", "aws", "goodie", "foodie", "Techpoint", "norrsken"];
+const TRUSTED = ["Google for Startups", "aws", "goodie", "Techpoint", "norrsken"];
 
 const WALL_COLS = 5;
 const WALL_MIN = 40; // tile real companies up to this many entries for density
 // Per-column drift speeds (seconds) — different speeds read as parallax.
-const COL_SPEED = [46, 38, 52, 34, 44];
+const COL_SPEED = [20, 25, 30, 35, 40];
 
 function tile(items: Fragment[], min: number): Fragment[] {
   if (items.length === 0) return [];
@@ -87,16 +87,6 @@ function AfricaDots({ className }: { className?: string }) {
 }
 
 export default function Hero({
-  fragments,
-  investorCount = 0,
-  stateCount = 0,
-}: {
-  fragments: Fragment[];
-  investorCount?: number;
-  stateCount?: number;
-}) {
-  const invExtra = investorCount > 4 ? investorCount - 4 : 0;
-
   return (
     <section className="hx">
       <EcosystemWall fragments={fragments} />
