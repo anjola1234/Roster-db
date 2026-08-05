@@ -39,7 +39,7 @@ export default async function Home() {
 
   return (
     <main>
-      <Hero fragments={fragments} />
+      <Hero fragments={fragments} investorCount={stats.investors} stateCount={stats.regions} />
 
       {/* ---- 4. Ecosystem statistics ---- */}
       <section className="section">
@@ -79,7 +79,7 @@ export default async function Home() {
             <span className="eyebrow">§ 03 / What you can do here</span>
             <h2>What you can do on the platform.</h2>
           </div>
-          <WhatPlatformDoes />
+          <WhatPlatformDoes stats={stats} topMatches={fragments.slice(0, 3)} />
         </div>
       </section>
 

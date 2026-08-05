@@ -2926,3 +2926,202 @@ section.blk > .eyebrow {
 @media (prefers-reduced-motion: reduce) {
   .rv-card, .rv-arrow { transition: none; }
 }
+
+/* =========================================================================
+   Dark editorial hero  (replaces the light hero) + journey preview panel.
+   New class namespace (hx-*, jpanel-preview, appframe, heat) so nothing
+   above is overridden except the intentional .jpanel grid change.
+   ========================================================================= */
+
+.grad-text {
+  background: var(--grad-text);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.hx {
+  position: relative;
+  overflow: hidden;
+  color: #fff;
+  background:
+    radial-gradient(900px 380px at 80% 0%, rgba(124, 58, 237, 0.36), transparent 60%),
+    radial-gradient(760px 360px at 10% 100%, rgba(79, 70, 229, 0.3), transparent 60%),
+    #0a0b1e;
+}
+.hx::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 26px 26px;
+  opacity: 0.6;
+  pointer-events: none;
+}
+.hx-in {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: minmax(0, 460px) 1fr;
+  gap: var(--s-10);
+  align-items: center;
+  padding: var(--s-20) 0;
+}
+.hx-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(38px, 4.6vw, 58px);
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  color: #fff;
+}
+.hx-sub {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 16px;
+  line-height: 1.6;
+  margin: var(--s-5) 0 0;
+  max-width: 42ch;
+}
+.hx-cta {
+  display: flex;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  margin-top: var(--s-8);
+}
+.hx-trust { margin-top: var(--s-10); }
+.hx-trust-lab { font-size: 12px; color: rgba(255, 255, 255, 0.5); margin-bottom: var(--s-3); }
+.hx-logos {
+  display: flex;
+  gap: var(--s-6);
+  flex-wrap: wrap;
+  align-items: center;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.hx-stage { position: relative; height: 440px; }
+.hx-card {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 12px 14px;
+  min-width: 158px;
+}
+.hx-card-h { display: flex; align-items: center; gap: 9px; }
+.hx-sw {
+  width: 26px; height: 26px; border-radius: 7px;
+  display: grid; place-items: center; flex: 0 0 auto;
+  font-family: var(--font-display); font-weight: 700; font-size: 11px; color: #fff;
+}
+.hx-cn { display: block; font-family: var(--font-display); font-weight: 700; font-size: 13px; color: #fff; }
+.hx-cc { display: block; font-size: 10px; color: rgba(255, 255, 255, 0.5); margin-top: 1px; }
+
+.hx-ctry {
+  position: absolute; right: 0; top: 2%; width: 168px;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px; padding: 14px; overflow: hidden;
+}
+.hx-ctry-num { font-family: var(--font-display); font-weight: 700; font-size: 30px; }
+.hx-ctry-lab { font-size: 11px; color: rgba(255, 255, 255, 0.6); margin-top: 2px; max-width: 88px; }
+.hx-africa { position: absolute; right: -6px; bottom: -6px; width: 92px; color: var(--emerald); opacity: 0.85; }
+.hx-africa circle { fill: currentColor; }
+
+.hx-inv {
+  position: absolute; right: 6%; bottom: 2%;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px; padding: 12px 14px;
+}
+.hx-inv-lab { font-size: 10px; color: rgba(255, 255, 255, 0.55); margin-bottom: 8px; }
+.hx-inv-stack { display: flex; align-items: center; }
+.hx-inv-stack .a { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #0a0b1e; margin-left: -8px; background: #5b54c9; }
+.hx-inv-stack .a:first-child { margin-left: 0; }
+.hx-inv-stack .a:nth-child(2) { background: #8b7be6; }
+.hx-inv-stack .a:nth-child(3) { background: #3f6fd8; }
+.hx-inv-stack .a:nth-child(4) { background: #6d64d6; }
+.hx-inv-plus { margin-left: 8px; font-family: var(--font-mono); font-size: 12px; color: rgba(255, 255, 255, 0.8); }
+
+@media (max-width: 960px) {
+  .hx-in { grid-template-columns: 1fr; gap: var(--s-8); padding: var(--s-16) 0; }
+  .hx-stage { height: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .hx-card, .hx-ctry, .hx-inv { position: static; width: auto; }
+}
+@media (max-width: 560px) {
+  .hx-stage { grid-template-columns: 1fr; }
+}
+
+/* ---- journey preview panel ---- */
+.jpanel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: var(--s-8);
+  align-items: start;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--s-6);
+  box-shadow: var(--shadow-sm);
+}
+@media (max-width: 820px) {
+  .jpanel { grid-template-columns: 1fr; }
+}
+.jpanel-preview { display: flex; flex-direction: column; gap: var(--s-3); min-width: 0; }
+
+.appframe {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--canvas);
+}
+.appbar {
+  background: #12142b;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0;
+}
+.appbar-mark { width: 26px; height: 26px; border-radius: 8px; background: var(--grad-brand); display: grid; place-items: center; margin-bottom: 4px; }
+.appbar-i { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid rgba(255, 255, 255, 0.28); }
+.appbody { padding: 14px; min-width: 0; }
+.appsearch {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 8px 12px; color: var(--muted); font-size: 12.5px;
+}
+.tm-lab { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin: var(--s-4) 0 var(--s-2); }
+.tm { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.tm-card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px; min-width: 0; }
+.tm-lg { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; color: #fff; font-family: var(--font-display); font-weight: 700; font-size: 11px; }
+.tm-n { font-weight: 600; font-size: 12px; margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tm-s { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.heat { display: flex; gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+.heat-map { width: 88px; flex: 0 0 auto; color: var(--indigo); opacity: 0.5; }
+.heat-map circle { fill: currentColor; }
+.heat-legend { display: flex; flex-direction: column; gap: 5px; font-size: 11px; color: var(--muted); }
+.heat-title { font-weight: 600; font-size: 13px; color: var(--ink); }
+.heat-cap { margin-bottom: 4px; }
+.heat-legend span i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+
+.jdetail h3 { font-family: var(--font-display); font-weight: 700; font-size: 22px; letter-spacing: -0.01em; margin: 0 0 var(--s-3); color: var(--ink); }
+.jdetail-n { color: var(--indigo); }
+.jdetail p { margin: 0 0 var(--s-5); font-size: 14.5px; line-height: 1.6; color: var(--ink-soft); }
+.jstats { display: flex; gap: var(--s-6); margin-bottom: var(--s-6); }
+.jstat-k { display: block; font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; color: var(--muted); }
+.jstat-v { display: block; font-family: var(--font-display); font-weight: 700; font-size: 20px; margin-top: 2px; }
+.jnav { display: flex; align-items: center; justify-content: space-between; gap: var(--s-4); }
+.jnav-arrows { display: flex; gap: 10px; }
+.jcirc { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-size: 18px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-soft); cursor: pointer; }
+.jcirc:hover { background: var(--surface-alt); }
+.jcirc.solid { border: none; background: var(--grad-brand); color: #fff; }
+
+.hx-title .grad-text {
+  background: linear-gradient(135deg, #818cf8 0%, #c4b5fd 55%, #a78bfa 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
