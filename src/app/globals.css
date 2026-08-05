@@ -3279,3 +3279,82 @@ section.blk > .eyebrow {
 @media (prefers-reduced-motion: reduce) {
   .flip-inner { transition: none; }
 }
+
+/* =========================================================================
+   Hero · blurred diagonal ecosystem wall (behind the content)
+   ========================================================================= */
+
+.hx { }
+.hx::before { z-index: 1; }        /* dot grid sits above the wall */
+.hx-in { z-index: 3; }             /* content sits above both */
+
+.hx-wall {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+/* oversize + rotate so the tilted wall fully covers the hero, rising to the right */
+.hx-wall-rot {
+  position: absolute;
+  top: -50%;
+  left: -20%;
+  width: 140%;
+  height: 200%;
+  display: flex;
+  justify-content: center;
+  gap: 46px;
+  transform: rotate(-9deg);
+  transform-origin: center;
+  filter: blur(3px);
+  opacity: 0.5;
+}
+.hx-wall-col {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  animation-name: hx-drift;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+.hx-wall-col:nth-child(2) { animation-delay: -8s; }
+.hx-wall-col:nth-child(3) { animation-delay: -16s; }
+.hx-wall-col:nth-child(4) { animation-delay: -24s; }
+.hx-wall-col:nth-child(5) { animation-delay: -4s; }
+
+@keyframes hx-drift {
+  from { transform: translateY(0); }
+  to { transform: translateY(-50%); }
+}
+
+.hx-wall-item { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+.hx-wall-sw {
+  width: 30px; height: 30px; border-radius: 8px; flex: 0 0 auto;
+  display: grid; place-items: center;
+  font-family: var(--font-display); font-weight: 700; font-size: 12px; color: #fff;
+}
+.hx-wall-img { width: 30px; height: 30px; border-radius: 8px; object-fit: contain; flex: 0 0 auto; }
+.hx-wall-name { font-weight: 600; font-size: 15px; color: rgba(255, 255, 255, 0.9); }
+
+/* scrim: darker on the left so the headline/paragraph stay crisp */
+.hx-wall::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, #0a0b1e 6%, rgba(10, 11, 30, 0.86) 34%, rgba(10, 11, 30, 0.5) 66%, rgba(10, 11, 30, 0.72) 100%),
+    linear-gradient(0deg, rgba(10, 11, 30, 0.65), transparent 28%, transparent 72%, rgba(10, 11, 30, 0.55));
+}
+
+@media (max-width: 720px) {
+  .hx-wall-rot { gap: 34px; opacity: 0.4; }
+  .hx-wall::after {
+    background: linear-gradient(0deg, rgba(10, 11, 30, 0.7), rgba(10, 11, 30, 0.55) 55%, rgba(10, 11, 30, 0.75));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hx-wall-col { animation: none; }
+}
