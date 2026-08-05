@@ -3205,3 +3205,77 @@ section.blk > .eyebrow {
 .pv-pt-row { display: flex; align-items: center; gap: 12px; margin-top: auto; padding-top: var(--s-3); flex-wrap: wrap; }
 .pv-pt-submit { background: var(--grad-brand); color: #fff; font-size: 13px; font-weight: 600; border-radius: 10px; padding: 10px 14px; }
 .pv-pt-follow { font-size: 13px; font-weight: 600; color: var(--indigo); }
+
+/* =========================================================================
+   Ecosystem grid — flip cards (number on the front, details on the back).
+   Fixed row heights keep the grid footprint stable through the rotation.
+   ========================================================================= */
+
+.ewall { grid-template-rows: repeat(3, 190px); }
+.ewall-card { height: 100%; }
+
+.flip { height: 100%; perspective: 1100px; cursor: pointer; outline: none; }
+.flip:focus-visible { outline: 2px solid var(--indigo); outline-offset: 3px; border-radius: var(--radius-lg); }
+.flip-inner {
+  position: relative;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.55s var(--ease);
+}
+.ewall-card.is-flipped .flip-inner { transform: rotateY(180deg); }
+
+.flip-front,
+.flip-back {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--s-6);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.flip-back { transform: rotateY(180deg); }
+
+/* only the visible face is interactive (keeps the hidden Explore link inert) */
+.flip-back { pointer-events: none; }
+.ewall-card.is-flipped .flip-back { pointer-events: auto; }
+.ewall-card.is-flipped .flip-front { pointer-events: none; }
+
+.flip:hover .flip-front,
+.flip:hover .flip-back { border-color: var(--line-strong); box-shadow: var(--shadow-md); }
+
+/* front face: number-first */
+.flip-front .ewall-num { margin-top: 10px; }
+.flip-hint {
+  margin-top: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  transition: color 0.18s var(--ease);
+}
+.flip:hover .flip-hint { color: var(--indigo); }
+
+/* back face uses the shared .ewall-sub / .ewall-viz / .ewall-cta styles */
+.flip-back .ewall-viz { margin-top: auto; padding-top: var(--s-3); }
+.flip-back .ewall-cta { margin-top: var(--s-3); }
+
+/* map card art on the back */
+.ewall-map .flip-back .ewall-viz { margin-top: var(--s-3); }
+.ewall-map .africa { width: 58%; max-width: 170px; color: var(--emerald); opacity: 0.5; }
+.ewall-map .africa circle { fill: currentColor; }
+
+@media (max-width: 900px) {
+  .ewall { grid-template-rows: none; }
+  .ewall-card { height: 200px; }
+  .ewall-map { height: 240px; }
+  .ewall-features { height: 200px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flip-inner { transition: none; }
+}
