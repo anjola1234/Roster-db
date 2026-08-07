@@ -1,6 +1,14 @@
 // IndexOne data schema
 // Real relational model backing the directory (replaces the old static JS mock data).
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
+//
+// This file implements the "directory-database-D1-D5-signals.xlsx" target
+// schema (D1 base/extension schemas, D5 region + category taxonomy, the
+// Signals layer, Trust & Community, People & Products). Two naming calls were
+// made to minimize blast radius on the existing app:
+//   - the doc's `listings` table is modeled here as `Company` (unchanged name)
+//   - the doc's `category_taxonomy` / `region_taxonomy` are `Industry` / `Region`
+// Everything else follows the document's field-for-field shape.
 
 generator client {
   provider = "prisma-client"
@@ -12,27 +20,36 @@ datasource db {
 }
 
 // ---------------------------------------------------------------------------
-// Taxonomy: Industry is self-relational so it covers both the two top-level
-// verticals (Fintech, Healthcare) AND their sub-verticals (Payments, Lending,
-// General, Specialist, ...) in one table. A Company always points at a leaf
-// (sub-vertical) Industry row; the vertical is reached via `parent`.
+// D5 · Category taxonomy (doc: category_taxonomy). Self-referencing tree:
+// vertical (Fintech/Healthcare/Education/Legal) -> category/sub-category
+// (Payments, Hospitals, ...). `schemaExtension` records which D1 extension
+// schema applies (hospitals_schema / fintech_schema / base only / TBD).
+// A Company always points at a leaf (category/sub-category) Industry row;
+// the vertical is reached via `parent`.
 // ---------------------------------------------------------------------------
 model Industry {
-  id        String     @id @default(cuid())
-  slug      String     @unique
-  name      String
-  icon      String?
-  accent    String?
-  parentId  String?
-  parent    Industry?  @relation("IndustryChildren", fields: [parentId], references: [id])
-  children  Industry[] @relation("IndustryChildren")
-  companies Company[]
-  features  Feature[]
+  id              String     @id @default(cuid())
+  slug            String     @unique
+  name            String
+  icon            String?
+  accent          String?
+  level           String // "vertical" | "category" | "sub-category"
+  schemaExtension String? // "hospitals_schema" | "fintech_schema" | "base only" | "TBD" | null
+  note            String?
+  parentId        String?
+  parent          Industry?  @relation("IndustryChildren", fields: [parentId], references: [id])
+  children        Industry[] @relation("IndustryChildren")
+
+  companies          Company[] // primary category
+  secondaryCompanies CompanyCategory[] // listing_categories (extra categories)
+  features           Feature[]
+  fieldDefinitions   FieldDefinition[]
 
   @@index([parentId])
 }
 
-// Feature / specialty tag taxonomy, scoped to a top-level vertical.
+// Feature / specialty tag taxonomy (D5 "Features & Tags" — the second filter
+// layer, separate from category), scoped to a top-level vertical.
 model Feature {
   id         String    @id @default(cuid())
   slug       String    @unique
@@ -45,24 +62,71 @@ model Feature {
   @@index([industryId])
 }
 
-// Nigerian states (pilot region set).
+// D1 field_definitions — the registry that makes the schema "customizable":
+// adding a category later = inserting field_definitions rows, not a rebuild.
+model FieldDefinition {
+  id           String   @id @default(cuid())
+  industryId   String
+  industry     Industry @relation(fields: [industryId], references: [id])
+  fieldKey     String // snake_case machine name
+  label        String
+  dataType     String // text|number|currency|date|url|enum|multi-select|boolean|...
+  required     Boolean  @default(false)
+  optionsJson  Json?
+  section      String?
+  displayOrder Int?
+  helpText     String?
+
+  @@unique([industryId, fieldKey])
+  @@index([industryId])
+}
+
+// ---------------------------------------------------------------------------
+// D5 · Region taxonomy (doc: region_taxonomy). Self-referencing tree:
+// country (Nigeria) -> state -> city (LGA level optional, supported by the
+// same self-referencing shape without a schema change).
+// ---------------------------------------------------------------------------
 model Region {
-  id        String          @id @default(cuid())
-  slug      String          @unique
-  name      String
-  companies CompanyRegion[]
+  id       String   @id @default(cuid())
+  slug     String   @unique
+  name     String
+  level    String // "country" | "state" | "lga" | "city"
+  isoCode  String?
+  note     String?
+  parentId String?
+  parent   Region?  @relation("RegionChildren", fields: [parentId], references: [id])
+  children Region[] @relation("RegionChildren")
+
+  companies   CompanyRegion[]
+  jobPostings JobPosting[]
+
+  @@index([parentId])
 }
 
 model CompanyRegion {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   companyId String
   regionId  String
-  isPrimary Boolean  @default(false)
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  region    Region   @relation(fields: [regionId], references: [id])
+  isPrimary Boolean @default(false)
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  region    Region  @relation(fields: [regionId], references: [id])
 
   @@unique([companyId, regionId])
   @@index([regionId])
+}
+
+// D1 listing_categories — secondary categories beyond the Company's primary
+// `industryId`. Mechanism only; none of the 11 seeded companies use it yet.
+model CompanyCategory {
+  id         String   @id @default(cuid())
+  companyId  String
+  industryId String
+  isPrimary  Boolean  @default(false)
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  industry   Industry @relation(fields: [industryId], references: [id])
+
+  @@unique([companyId, industryId])
+  @@index([industryId])
 }
 
 model Investor {
@@ -70,6 +134,7 @@ model Investor {
   slug        String            @unique
   name        String
   type        String
+  website     String?
   investments CompanyInvestor[]
 }
 
@@ -87,100 +152,140 @@ model CompanyInvestor {
 }
 
 model FundingRound {
-  id          String            @id @default(cuid())
-  companyId   String
-  round       String
-  date        String
-  amount      Float?
+  id           String            @id @default(cuid())
+  companyId    String
+  round        String // pre-seed|seed|Series A/B/C|debt|grant|Acquisition (free text, matches D1 round_type vocabulary)
+  date         String
+  amount       Float?
+  currency     String? // USD|NGN|EUR|GBP
   leadInvestor String?
-  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  investors   CompanyInvestor[]
+  sourceUrl    String?
+  company      Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  investors    CompanyInvestor[]
 
   @@index([companyId])
 }
 
+// D1/S "People & Products" — Person is now company-agnostic (a person can
+// found multiple companies); the link + role/tenure lives on ListingPerson.
 model Person {
   id        String   @id @default(cuid())
-  companyId String
   name      String
-  role      String
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  slug      String   @unique
+  headline  String?
+  photo     String?
+  linkedin  String?
   createdAt DateTime @default(now())
 
+  listings ListingPerson[]
+}
+
+model ListingPerson {
+  id        String    @id @default(cuid())
+  personId  String
+  companyId String
+  role      String // founder|co-founder|ceo|executive|board|former
+  startDate DateTime?
+  endDate   DateTime?
+  isCurrent Boolean   @default(true)
+  person    Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([personId, companyId, role])
   @@index([companyId])
+  @@index([personId])
 }
 
 model Review {
-  id          String   @id @default(cuid())
-  companyId   String
-  authorName  String
-  authorRole  String
-  rating      Int
-  title       String
-  body        String
-  createdAt   DateTime @default(now())
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  id            String   @id @default(cuid())
+  companyId     String
+  userId        String? // nullable: existing seed reviews are demo content with no real account behind them
+  authorName    String
+  authorRole    String
+  rating        Int
+  title         String
+  body          String
+  status        String   @default("pending") // pending|published|rejected|removed
+  ownerResponse String?
+  helpfulCount  Int      @default(0)
+  createdAt     DateTime @default(now())
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user          User?    @relation(fields: [userId], references: [id])
 
   @@index([companyId])
+  @@index([userId])
 }
 
 model Company {
-  id                String   @id @default(cuid())
-  slug              String   @unique
-  name              String
-  logoInitials      String
-  logoColor         String
-  industryId        String
-  industry          Industry @relation(fields: [industryId], references: [id])
-  shortDescription  String
-  longDescription   String
-  website            String
-  heroImageId        String?
-  socials             Json?
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  name         String
+  logoInitials String
+  logoColor    String
+  industryId   String
+  industry     Industry @relation(fields: [industryId], references: [id])
+  shortDescription String
+  longDescription  String
+  website          String
+  heroImageId      String?
+  socials          Json?
 
-  foundingYear        Int?
-  employeeRange        String?
-  businessModel        String?
-  regulator            String?
+  // Company registration — shared Base field (D1: CAC applies to every NG company)
+  registrationBody   String? @default("CAC (Nigeria)")
+  registrationNumber String?
+  registrationLink   String?
 
-  status               String   @default("active")
-  verification         String   @default("unverified") // verified | unverified | flagged
-  source               String?
-  lastVerifiedAt       DateTime?
-  submittedByEmail     String?
+  foundingYear  Int?
+  employeeRange String?
+  businessModel String?
+  regulator     String?
 
-  ratingScore          Float?
-  ratingCount          Int      @default(0)
-  ratingDist           Json?
+  status         String    @default("active") // listing_status: draft|active|archived (also "pending" for submissions)
+  verification   String    @default("unverified") // verification_status: verified | unverified | flagged
+  source         String?
+  lastVerifiedAt DateTime?
+  submittedByEmail String?
+
+  ratingScore Float?
+  ratingCount Int    @default(0)
+  ratingDist  Json?
+
+  // The customizable payload for genuinely new/uncommon fields going forward.
+  // High-value queryable fintech/hospital fields stay as real typed columns
+  // below (per the doc's own "selectively promoted to real columns" allowance).
+  customFields Json?
 
   // ---- fintech-specific (nullable for non-fintech rows) ----
-  totalFunding         Float?
-  valuation            Float?
-  valuationDate        String?
-  licenses             Json?
+  totalFunding  Float?
+  valuation     Float?
+  valuationDate String?
+  licenses      Json?
 
   // ---- hospital-specific (nullable for non-hospital rows) ----
-  hospitalType         String?
-  ownership            String?
-  yearEstablished      Int?
-  bedCapacity          Int?
-  emergency            Boolean?
-  city                 String?
-  address              String?
-  services             Json?
-  accreditation        Json?
-  accreditationBody    String?
-  facilityBody         String?
-  facilityNo           String?
-  contactPhone         String?
-  contactEmail         String?
+  hospitalType      String?
+  ownership         String?
+  yearEstablished   Int?
+  bedCapacity       Int?
+  emergency         Boolean?
+  city              String?
+  address           String?
+  services          Json?
+  accreditation     Json?
+  accreditationBody String?
+  facilityBody      String?
+  facilityNo        String?
+  contactPhone      String?
+  contactEmail      String?
 
-  createdAt            DateTime @default(now())
+  createdAt DateTime @default(now())
 
   // ---- company activity (lifecycle status + computed activity score) ----
   // lifecycleStatus is an editorial fact set by a human ("operating" | "closed" |
   // "acquired" | "merged" | "unverified") — mirrors the plain-string convention
   // already used above for `status`/`verification` rather than a Prisma enum.
+  // activityScore/activityLabel/activityScorePrev are denormalized reads of
+  // this Company's latest `Score` row (scoreType="activity") for fast page
+  // reads — the `Score` table (see below) is the real source of truth.
   lifecycleStatus      String    @default("unverified")
   activityScore        Int?
   activityLabel        String? // "growing" | "active" | "low_activity" | "at_risk" | "dormant"
@@ -193,29 +298,308 @@ model Company {
   socialLastPostAt     DateTime?
 
   regions       CompanyRegion[]
+  categories    CompanyCategory[]
   tags          Feature[]         @relation("CompanyFeatures")
   investors     CompanyInvestor[]
   fundingRounds FundingRound[]
-  people        Person[]
+  listingPeople ListingPerson[]
   reviews       Review[]
-  activityChecks ActivityCheck[]
+
+  websiteChecks WebsiteCheck[]
+  scores        Score[]
+
+  socialMetrics     SocialMetric[]
+  newsItems         NewsItem[]
+  jobPostings       JobPosting[]
+  trafficEstimates  TrafficEstimate[]
+  fieldProvenance   FieldProvenance[]
+
+  verifications ListingVerification[]
+  claims        ListingClaim[]
+  corrections   ListingCorrection[]
+
+  products Product[]
+  awards   Award[]
+
+  currentSignal ListingCurrentSignal?
 
   @@index([industryId])
 }
 
 // Append-only history of real website-reachability checks used to compute a
 // Company's activityScore. See src/lib/activityCheck.ts for the heuristic.
-model ActivityCheck {
-  id         String   @id @default(cuid())
-  companyId  String
-  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  source     String // "website" (only source implemented right now)
-  result     String // "reachable" | "unreachable" | "parked" | "error"
-  httpStatus Int?
-  detail     String?
-  checkedAt  DateTime @default(now())
+// Matches D1 Signals `website_checks` table; `result` is an extra field (not
+// in the source doc verbatim) kept to drive the existing parked-domain /
+// reachability heuristic.
+model WebsiteCheck {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  checkedAt       DateTime @default(now())
+  url             String
+  httpStatus      Int?
+  isUp            Boolean
+  responseMs      Int?
+  sslValid        Boolean?
+  sslExpiresOn    DateTime?
+  domainExpiresOn DateTime?
+  finalUrl        String?
+  lighthousePerf  Int?
+  errorNote       String?
+  result          String // "reachable" | "unreachable" | "parked" | "error"
 
   @@index([companyId, checkedAt])
+}
+
+// S · Scores & Provenance -----------------------------------------------------
+
+model Score {
+  id             String   @id @default(cuid())
+  companyId      String
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  scoreType      String // activity|website_health|social_presence|funding_strength|overall
+  value          Float
+  band           String? // booming|growing|stable|quiet|dormant
+  componentsJson Json // per-input contribution, e.g. {"website": 100}
+  coverage       Float // 0-1, share of inputs with real data
+  weightsVersion String
+  computedAt     DateTime @default(now())
+
+  @@index([companyId, scoreType, computedAt])
+}
+
+// Config, not code — never edit a published version, create the next one.
+model ScoreWeight {
+  version         String
+  scoreType       String
+  component       String
+  weight          Float
+  decayDays       Int?
+  minObservations Int?
+  effectiveFrom   DateTime
+
+  @@id([version, scoreType, component])
+}
+
+model DataSource {
+  id            String    @id @default(cuid())
+  key           String    @unique
+  name          String
+  kind          String // official_api|registry|rss|scrape|manual|partner
+  trustRank     Int
+  isPaid        Boolean   @default(false)
+  termsUrl      String?
+  rateLimitNote String?
+  lastRunAt     DateTime?
+
+  socialMetrics     SocialMetric[]
+  jobPostings       JobPosting[]
+  trafficEstimates  TrafficEstimate[]
+  fieldProvenance   FieldProvenance[]
+  crawlRuns         CrawlRun[]
+}
+
+model FieldProvenance {
+  id         String     @id @default(cuid())
+  companyId  String
+  company    Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  fieldKey   String
+  valueText  String
+  sourceId   String
+  source     DataSource @relation(fields: [sourceId], references: [id])
+  sourceUrl  String?
+  confidence Float?
+  fetchedAt  DateTime
+  isWinning  Boolean    @default(false)
+
+  @@index([companyId, fieldKey])
+  @@index([sourceId])
+}
+
+model CrawlRun {
+  id             String     @id @default(cuid())
+  sourceId       String
+  source         DataSource @relation(fields: [sourceId], references: [id])
+  startedAt      DateTime
+  finishedAt     DateTime?
+  status         String // success|partial|failed|rate_limited
+  recordsIn      Int?
+  recordsWritten Int?
+  errorNote      String?
+
+  @@index([sourceId])
+}
+
+// S · Observations (append-only time series, never UPDATEd) ------------------
+
+model SocialMetric {
+  id             String      @id @default(cuid())
+  companyId      String
+  company        Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  platform       String // linkedin|x|instagram|facebook|youtube|tiktok
+  observedAt     DateTime
+  handle         String?
+  followers      Int?
+  postsTotal     Int?
+  posts30d       Int?
+  engagementRate Float?
+  lastPostAt     DateTime?
+  sourceId       String?
+  source         DataSource? @relation(fields: [sourceId], references: [id])
+  isEstimate     Boolean     @default(false)
+
+  @@index([companyId, observedAt])
+}
+
+model NewsItem {
+  id          String    @id @default(cuid())
+  companyId   String
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  publishedAt DateTime?
+  fetchedAt   DateTime  @default(now())
+  headline    String
+  url         String    @unique
+  outlet      String?
+  summary     String?
+  itemType    String? // funding|launch|expansion|hiring|award|leadership|legal|closure|other
+  sentiment   String? // positive|neutral|negative
+  relevance   Float?
+  isHidden    Boolean   @default(false)
+
+  @@index([companyId])
+}
+
+model JobPosting {
+  id          String      @id @default(cuid())
+  companyId   String
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  title       String
+  postedAt    DateTime?
+  firstSeenAt DateTime    @default(now())
+  lastSeenAt  DateTime?
+  location    String?
+  regionId    String?
+  region      Region?     @relation(fields: [regionId], references: [id])
+  isRemote    Boolean     @default(false)
+  department  String? // engineering|sales|ops|finance|other
+  sourceId    String?
+  source      DataSource? @relation(fields: [sourceId], references: [id])
+  sourceUrl   String?
+
+  @@index([companyId])
+}
+
+model TrafficEstimate {
+  id             String      @id @default(cuid())
+  companyId      String
+  company        Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  periodMonth    DateTime // first-of-month
+  visitsEstimate Int?
+  rankCountry    Int?
+  sourceId       String?
+  source         DataSource? @relation(fields: [sourceId], references: [id])
+
+  @@index([companyId, periodMonth])
+}
+
+// S · Trust & Community --------------------------------------------------------
+
+model ListingVerification {
+  id           String    @id @default(cuid())
+  companyId    String
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  badgeType    String // website|cac|founder|email|phone|claimed|licence
+  status       String    @default("pending") // pending|verified|rejected|expired
+  method       String? // dns_txt|email_link|document|registry_lookup|manual
+  evidenceUrl  String?
+  verifiedById String? // admin/user id, not FK-enforced
+  verifiedAt   DateTime?
+  expiresAt    DateTime?
+  note         String?
+
+  @@index([companyId])
+}
+
+model ListingClaim {
+  id          String    @id @default(cuid())
+  companyId   String
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  claimedRole String // owner|employee|agency|other
+  proofMethod String // work_email|dns_txt|document|phone_callback
+  status      String    @default("pending") // pending|approved|rejected|revoked
+  decidedById String?
+  decidedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([companyId])
+  @@index([userId])
+}
+
+model ListingCorrection {
+  id             String    @id @default(cuid())
+  companyId      String
+  company        Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId         String?
+  user           User?     @relation(fields: [userId], references: [id])
+  correctionType String // edit_field|report_closed|duplicate|wrong_category|abuse
+  fieldKey       String?
+  proposedValue  String?
+  evidenceUrl    String?
+  status         String    @default("pending") // pending|accepted|rejected|merged
+  reviewedById   String?
+  reviewedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([companyId])
+}
+
+// S · People & Products --------------------------------------------------------
+
+model Product {
+  id          String  @id @default(cuid())
+  companyId   String
+  company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  productUrl  String?
+  platform    Json? // multi-select: web|ios|android|ussd|api
+  appStoreId  String?
+  status      String? // live|beta|discontinued
+
+  @@index([companyId])
+}
+
+model Award {
+  id        String    @id @default(cuid())
+  companyId String
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  title     String
+  awardedBy String?
+  awardedOn DateTime?
+  sourceUrl String?
+
+  @@index([companyId])
+}
+
+// Read model, NOT source of truth — one row per listing holding the newest
+// value of every signal so pages/filters never scan raw time-series. Rebuilt
+// after each crawl; schema-only for now (no crawlers exist yet to populate it).
+model ListingCurrentSignal {
+  companyId        String    @id
+  company          Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  isWebsiteUp      Boolean?
+  websiteCheckedAt DateTime?
+  uptime30d        Float?
+  followersTotal   Int?
+  lastSocialPostAt DateTime?
+  newsCount90d     Int?
+  openJobs         Int?
+  totalFunding     Float?
+  overallScore     Float?
+  scoreBand        String?
+  refreshedAt      DateTime  @default(now())
 }
 
 model User {
@@ -225,6 +609,9 @@ model User {
   name         String
   createdAt    DateTime  @default(now())
   sessions     Session[]
+  reviews      Review[]
+  claims       ListingClaim[]
+  corrections  ListingCorrection[]
 }
 
 model Session {
