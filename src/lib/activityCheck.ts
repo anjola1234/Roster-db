@@ -41,14 +41,20 @@ export async function checkCompanyWebsite(
   let result: CheckResult;
   let httpStatus: number | null = null;
   let bodyText = "";
+  let finalUrl: string | null = null;
+  let responseMs: number | null = null;
+  let errorNote: string | null = null;
 
+  const startedAt = Date.now();
   try {
     const res = await fetch(company.website, {
       method: "GET",
       redirect: "follow",
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
+    responseMs = Date.now() - startedAt;
     httpStatus = res.status;
+    finalUrl = res.url || null;
 
     // Read the body but cap how much we buffer — some sites/CDNs stream huge
     // pages and we only need enough text to sniff parked-domain phrases.
@@ -63,10 +69,13 @@ export async function checkCompanyWebsite(
     } else {
       result = "unreachable";
     }
-  } catch {
+  } catch (e) {
     // Network error, DNS failure, or fetch timeout.
     result = "error";
+    errorNote = e instanceof Error ? e.message : "Unknown fetch error";
   }
+
+  const isUp = result === "reachable";
 
   // Content-change tracking: hash the normalized body and compare against
   // whatever we stored last time.
@@ -79,23 +88,45 @@ export async function checkCompanyWebsite(
     });
   }
 
-  // Record this check in history.
-  await prisma.activityCheck.create({
+  // Record this check in history. SSL/domain-expiry/lighthouse fields are
+  // left null — no WHOIS/RDAP or Lighthouse integration exists yet, and we
+  // never fabricate a value for those.
+  await prisma.websiteCheck.create({
     data: {
       companyId: company.id,
-      source: "website",
-      result,
+      url: company.website,
       httpStatus,
+      isUp,
+      responseMs,
+      finalUrl,
+      errorNote,
+      result,
       checkedAt: now,
     },
   });
 
   // Recompute the score from history (including the check we just inserted)
-  // and persist it + the previous score + websiteStatus/lastCheckedAt.
-  const isFirstEverCheck = (await prisma.activityCheck.count({ where: { companyId: company.id } })) === 1;
+  // and persist it as a new Score row (scoreType="activity") + the
+  // denormalized Company columns kept for fast reads.
+  const isFirstEverCheck = (await prisma.websiteCheck.count({ where: { companyId: company.id } })) === 1;
   const fresh = await prisma.company.findUniqueOrThrow({ where: { id: company.id } });
   const score = await computeActivityScore(company.id);
   const label = score === null ? null : labelForScore(score, fresh.activityScore);
+
+  if (score !== null) {
+    await prisma.score.create({
+      data: {
+        companyId: company.id,
+        scoreType: "activity",
+        value: score,
+        band: label,
+        componentsJson: { website: score },
+        coverage: 1, // website is the only input feeding this score today
+        weightsVersion: "v1",
+        computedAt: now,
+      },
+    });
+  }
 
   await prisma.company.update({
     where: { id: company.id },
@@ -140,8 +171,8 @@ const DOWN_STATE_CAP = 14;
 
 export async function computeActivityScore(companyId: string): Promise<number | null> {
   const since = new Date(Date.now() - RECENT_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-  const allRecent = await prisma.activityCheck.findMany({
-    where: { companyId, source: "website", checkedAt: { gte: since } },
+  const allRecent = await prisma.websiteCheck.findMany({
+    where: { companyId, checkedAt: { gte: since } },
     orderBy: { checkedAt: "desc" },
     take: RECENT_CHECK_LIMIT,
   });
