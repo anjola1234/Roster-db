@@ -411,20 +411,20 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
             <section className="blk" id="people">
               <span className="eyebrow">§ 05 / People</span>
               <h3 className="blk-title">Founders & leadership</h3>
-              {company.people.length ? (
+              {company.listingPeople.length ? (
                 <div className="people-grid">
-                  {company.people.map((p) => (
-                    <div key={p.id} className="person-card">
+                  {company.listingPeople.map((lp) => (
+                    <div key={lp.id} className="person-card">
                       <div className="person-avatar">
-                        {p.name
+                        {lp.person.name
                           .split(" ")
                           .map((w) => w[0])
                           .slice(0, 2)
                           .join("")}
                       </div>
                       <div>
-                        <div style={{ fontWeight: 600, fontSize: 14 }}>{p.name}</div>
-                        <div style={{ fontSize: 12.5, color: "var(--muted)" }}>{p.role}</div>
+                        <div style={{ fontWeight: 600, fontSize: 14 }}>{lp.person.name}</div>
+                        <div style={{ fontSize: 12.5, color: "var(--muted)" }}>{lp.role}</div>
                       </div>
                     </div>
                   ))}

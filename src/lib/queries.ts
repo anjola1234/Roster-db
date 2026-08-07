@@ -10,8 +10,8 @@ export const companyInclude = {
   tags: true,
   investors: { include: { investor: true, fundingRound: true } },
   fundingRounds: true,
-  people: true,
-  reviews: { orderBy: { createdAt: "desc" as const } },
+  listingPeople: { include: { person: true } },
+  reviews: { where: { status: "published" as const }, orderBy: { createdAt: "desc" as const } },
 } satisfies Prisma.CompanyInclude;
 
 export type CompanyFull = Prisma.CompanyGetPayload<{ include: typeof companyInclude }>;
@@ -110,8 +110,11 @@ export async function getIndustries() {
   return verticals;
 }
 
-export async function getRegions() {
-  return prisma.region.findMany({ orderBy: { name: "asc" } });
+// Directory/filter UI only ever wants a flat pickable list — the state level
+// of the region tree (the doc's region_taxonomy also has country and city
+// levels, used for future breadcrumb-style URLs, not this filter UI).
+export async function getRegions(level: string = "state") {
+  return prisma.region.findMany({ where: { level }, orderBy: { name: "asc" } });
 }
 
 export async function getFeatures(verticalSlug?: string) {
@@ -131,11 +134,15 @@ export async function getEcosystemStats() {
   const [companies, reviews, investors, regions, industries, people, features] =
     await Promise.all([
       prisma.company.count(),
-      prisma.review.count(),
+      prisma.review.count({ where: { status: "published" } }),
       prisma.investor.count(),
-      prisma.region.count(),
+      // "States" on the homepage — the state level of the region tree, not
+      // the whole country/state/city tree.
+      prisma.region.count({ where: { level: "state" } }),
       prisma.industry.count(),
-      prisma.person.count(),
+      // One row per (person, company) listing — matches the old Person shape
+      // where a founder was one row per company they founded.
+      prisma.listingPerson.count(),
       prisma.feature.count(),
     ]);
   return { companies, reviews, investors, regions, industries, people, features };
@@ -152,6 +159,7 @@ export async function getTopCompaniesPreview(limit = 10) {
 
 export async function getReviewDeck(limit = 15) {
   return prisma.review.findMany({
+    where: { status: "published" },
     include: { company: true },
     orderBy: { createdAt: "desc" },
     take: limit,

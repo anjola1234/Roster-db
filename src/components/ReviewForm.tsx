@@ -49,7 +49,11 @@ export default function ReviewForm({ companySlug }: { companySlug: string }) {
   }
 
   if (done) {
-    return <p className="form-msg ok" style={{ marginTop: 16 }}>Thanks — your review has been posted.</p>;
+    return (
+      <p className="form-msg ok" style={{ marginTop: 16 }}>
+        Thanks — your review has been submitted and is awaiting moderation before it appears publicly.
+      </p>
+    );
   }
 
   return (
