@@ -1,7 +1,12 @@
 /**
- * Seed script — migrates the original static prototype data (index.html /
- * script.js) into the real relational schema, plus adds the review / founder
- * data the new homepage spec needs. Run with `npx prisma db seed`.
+ * Seed script for the IndexOne directory-database schema (D1 base/extension
+ * schemas, D5 region + category taxonomy, the Signals layer scaffolding, and
+ * corrected/cited company data). Run with `npx prisma db seed`.
+ *
+ * Idempotent: everything below uses upsert (or find-then-create) so re-running
+ * this after `prisma migrate deploy` both creates fresh data and repairs
+ * previously-seeded rows (e.g. the Duchess address fix, re-pointed category
+ * slugs) without duplicating anything.
  */
 import "dotenv/config";
 import { PrismaClient } from "../src/generated/prisma/client";
@@ -13,45 +18,134 @@ if (!process.env.DATABASE_URL) {
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
+const slugify = (s: string) =>
+  s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+
 // ---------------------------------------------------------------------------
-// Taxonomy (mirrors REGIONS / CATEGORIES / TAGS from the old script.js)
+// D5 · Region taxonomy — Nigeria: country -> 36 states + FCT -> sample cities.
 // ---------------------------------------------------------------------------
-const REGIONS = [
-  { slug: "lagos", name: "Lagos" },
-  { slug: "fct", name: "Abuja (FCT)" },
-  { slug: "rivers", name: "Rivers" },
-  { slug: "oyo", name: "Oyo" },
-  { slug: "kano", name: "Kano" },
+type RegionSeed = {
+  slug: string;
+  name: string;
+  level: "country" | "state" | "city";
+  parentSlug?: string;
+  isoCode?: string;
+  note?: string;
+};
+
+const REGIONS: RegionSeed[] = [
+  { slug: "ng", name: "Nigeria", level: "country", isoCode: "NG" },
+
+  // ---- states (36 + FCT) ----
+  { slug: "fct", name: "Federal Capital Territory", level: "state", parentSlug: "ng", note: "Abuja is the capital" },
+  { slug: "abia", name: "Abia", level: "state", parentSlug: "ng" },
+  { slug: "adamawa", name: "Adamawa", level: "state", parentSlug: "ng" },
+  { slug: "akwa-ibom", name: "Akwa Ibom", level: "state", parentSlug: "ng" },
+  { slug: "anambra", name: "Anambra", level: "state", parentSlug: "ng" },
+  { slug: "bauchi", name: "Bauchi", level: "state", parentSlug: "ng" },
+  { slug: "bayelsa", name: "Bayelsa", level: "state", parentSlug: "ng" },
+  { slug: "benue", name: "Benue", level: "state", parentSlug: "ng" },
+  { slug: "borno", name: "Borno", level: "state", parentSlug: "ng" },
+  { slug: "cross-river", name: "Cross River", level: "state", parentSlug: "ng" },
+  { slug: "delta", name: "Delta", level: "state", parentSlug: "ng" },
+  { slug: "ebonyi", name: "Ebonyi", level: "state", parentSlug: "ng" },
+  { slug: "edo", name: "Edo", level: "state", parentSlug: "ng" },
+  { slug: "ekiti", name: "Ekiti", level: "state", parentSlug: "ng" },
+  { slug: "enugu", name: "Enugu", level: "state", parentSlug: "ng" },
+  { slug: "gombe", name: "Gombe", level: "state", parentSlug: "ng" },
+  { slug: "imo", name: "Imo", level: "state", parentSlug: "ng" },
+  { slug: "jigawa", name: "Jigawa", level: "state", parentSlug: "ng" },
+  { slug: "kaduna", name: "Kaduna", level: "state", parentSlug: "ng" },
+  { slug: "kano", name: "Kano", level: "state", parentSlug: "ng" },
+  { slug: "katsina", name: "Katsina", level: "state", parentSlug: "ng" },
+  { slug: "kebbi", name: "Kebbi", level: "state", parentSlug: "ng" },
+  { slug: "kogi", name: "Kogi", level: "state", parentSlug: "ng" },
+  { slug: "kwara", name: "Kwara", level: "state", parentSlug: "ng" },
+  { slug: "lagos", name: "Lagos", level: "state", parentSlug: "ng" },
+  { slug: "nasarawa", name: "Nasarawa", level: "state", parentSlug: "ng" },
+  { slug: "niger", name: "Niger", level: "state", parentSlug: "ng" },
+  { slug: "ogun", name: "Ogun", level: "state", parentSlug: "ng" },
+  { slug: "ondo", name: "Ondo", level: "state", parentSlug: "ng" },
+  { slug: "osun", name: "Osun", level: "state", parentSlug: "ng" },
+  { slug: "oyo", name: "Oyo", level: "state", parentSlug: "ng" },
+  { slug: "plateau", name: "Plateau", level: "state", parentSlug: "ng" },
+  { slug: "rivers", name: "Rivers", level: "state", parentSlug: "ng" },
+  { slug: "sokoto", name: "Sokoto", level: "state", parentSlug: "ng" },
+  { slug: "taraba", name: "Taraba", level: "state", parentSlug: "ng" },
+  { slug: "yobe", name: "Yobe", level: "state", parentSlug: "ng" },
+  { slug: "zamfara", name: "Zamfara", level: "state", parentSlug: "ng" },
+
+  // ---- sample cities (starter set — Nigeria's 774 LGAs could sit between
+  // state and city without a schema change, this is not exhaustive) ----
+  { slug: "abuja", name: "Abuja", level: "city", parentSlug: "fct" },
+  { slug: "ikeja", name: "Ikeja", level: "city", parentSlug: "lagos" },
+  { slug: "victoria-island", name: "Victoria Island", level: "city", parentSlug: "lagos" },
+  { slug: "lekki", name: "Lekki", level: "city", parentSlug: "lagos" },
+  { slug: "yaba", name: "Yaba", level: "city", parentSlug: "lagos" },
+  { slug: "port-harcourt", name: "Port Harcourt", level: "city", parentSlug: "rivers" },
+  // "kano"/"kaduna" city slugs suffixed to avoid colliding with the state slug.
+  { slug: "kano-city", name: "Kano", level: "city", parentSlug: "kano" },
+  { slug: "ibadan", name: "Ibadan", level: "city", parentSlug: "oyo" },
+  { slug: "kaduna-city", name: "Kaduna", level: "city", parentSlug: "kaduna" },
 ];
 
-const INDUSTRIES = [
-  {
-    slug: "fintech",
-    name: "Fintech",
-    icon: "▲",
-    accent: "#4F46E5",
-    subs: ["Payments", "Lending", "Insurtech", "Wealthtech", "Digital Banks"],
-  },
-  {
-    slug: "healthcare",
-    name: "Healthcare",
-    icon: "✚",
-    accent: "#10B981",
-    subs: ["General", "Specialist", "Teaching", "Clinic", "Diagnostic"],
-  },
+// ---------------------------------------------------------------------------
+// D5 · Category taxonomy — Healthcare + Fintech (launch verticals) plus
+// Education + Legal seeded as inactive FUTURE placeholders (no listings use
+// them) to prove adding a vertical later is a config change, not a rebuild.
+// ---------------------------------------------------------------------------
+type IndustrySeed = {
+  slug: string;
+  name: string;
+  level: "vertical" | "category" | "sub-category";
+  parentSlug?: string;
+  icon?: string;
+  accent?: string;
+  schemaExtension?: string;
+  note?: string;
+};
+
+const INDUSTRIES: IndustrySeed[] = [
+  { slug: "healthcare", name: "Healthcare", level: "vertical", icon: "✚", accent: "#10B981" },
+  { slug: "hospitals", name: "Hospitals", level: "category", parentSlug: "healthcare", schemaExtension: "hospitals_schema", note: "LAUNCH · pilot = Hospitals in Nigeria" },
+  { slug: "clinics", name: "Clinics", level: "category", parentSlug: "healthcare", schemaExtension: "hospitals_schema", note: "reuses hospitals extension" },
+  { slug: "pharmacies", name: "Pharmacies", level: "category", parentSlug: "healthcare", schemaExtension: "base only (+ few fields)" },
+  { slug: "diagnostic-labs", name: "Diagnostic Labs", level: "category", parentSlug: "healthcare", schemaExtension: "hospitals_schema" },
+  { slug: "telemedicine", name: "Telemedicine", level: "category", parentSlug: "healthcare", schemaExtension: "base only" },
+
+  { slug: "fintech", name: "Fintech", level: "vertical", icon: "▲", accent: "#4F46E5" },
+  { slug: "payments", name: "Payments", level: "sub-category", parentSlug: "fintech", schemaExtension: "fintech_schema", note: "LAUNCH" },
+  { slug: "lending", name: "Lending", level: "sub-category", parentSlug: "fintech", schemaExtension: "fintech_schema", note: "LAUNCH" },
+  { slug: "insurtech", name: "Insurtech", level: "sub-category", parentSlug: "fintech", schemaExtension: "fintech_schema", note: "LAUNCH" },
+  { slug: "wealthtech", name: "Wealthtech", level: "sub-category", parentSlug: "fintech", schemaExtension: "fintech_schema" },
+  { slug: "digital-banks", name: "Digital Banks", level: "sub-category", parentSlug: "fintech", schemaExtension: "fintech_schema" },
+  { slug: "crypto", name: "Crypto/Blockchain", level: "sub-category", parentSlug: "fintech", schemaExtension: "fintech_schema" },
+  { slug: "regtech", name: "Regtech", level: "sub-category", parentSlug: "fintech", schemaExtension: "fintech_schema" },
+
+  // ---- FUTURE examples — seeded inactive (no listings), proves extensibility ----
+  { slug: "education", name: "Education", level: "vertical", schemaExtension: "TBD", note: "FUTURE example" },
+  { slug: "universities", name: "Universities", level: "category", parentSlug: "education", schemaExtension: "education_schema TBD" },
+  { slug: "colleges", name: "Colleges", level: "category", parentSlug: "education", schemaExtension: "education_schema TBD" },
+  { slug: "legal", name: "Legal", level: "vertical", schemaExtension: "TBD", note: "FUTURE example" },
+  { slug: "law-firms", name: "Law Firms", level: "category", parentSlug: "legal", schemaExtension: "legal_schema TBD" },
 ];
 
+// ---------------------------------------------------------------------------
+// D5 · Features & Tags — matches the document's exact slugs/groups.
+// ---------------------------------------------------------------------------
 const TAGS: Record<string, { slug: string; name: string; grp: string }[]> = {
   fintech: [
     { slug: "payment-gateway", name: "Payment Gateway", grp: "Payments" },
-    { slug: "cross-border", name: "Cross-Border", grp: "Payments" },
+    { slug: "cross-border-payments", name: "Cross-Border Payments", grp: "Payments" },
     { slug: "virtual-cards", name: "Virtual Cards", grp: "Payments" },
     { slug: "ussd", name: "USSD", grp: "Payments" },
-    { slug: "pos", name: "POS / Terminals", grp: "Payments" },
-    { slug: "lending", name: "Lending", grp: "Credit" },
+    { slug: "pos-terminals", name: "POS/Terminals", grp: "Payments" },
+    { slug: "lending", name: "Lending & Loans", grp: "Credit" },
     { slug: "savings", name: "Savings", grp: "Wealth" },
     { slug: "investments", name: "Investments", grp: "Wealth" },
+    { slug: "stablecoins", name: "Stablecoins", grp: "Crypto" },
     { slug: "multi-currency", name: "Multi-currency", grp: "Payments" },
+    { slug: "insurance", name: "Insurance", grp: "Insurance" },
   ],
   healthcare: [
     { slug: "maternity", name: "Maternity", grp: "Specialty" },
@@ -60,9 +154,128 @@ const TAGS: Record<string, { slug: string; name: string; grp: string }[]> = {
     { slug: "oncology", name: "Oncology", grp: "Specialty" },
     { slug: "surgery", name: "Surgery", grp: "Specialty" },
     { slug: "dialysis", name: "Dialysis", grp: "Service" },
-    { slug: "imaging", name: "Imaging", grp: "Service" },
+    { slug: "diagnostics-imaging", name: "Diagnostics/Imaging", grp: "Service" },
     { slug: "emergency", name: "24/7 Emergency", grp: "Service" },
+    { slug: "telemedicine", name: "Telemedicine", grp: "Mode" },
   ],
+};
+
+// ---------------------------------------------------------------------------
+// D1 · field_definitions registry — documents the two launched extension
+// schemas (fields already exist as real typed Company columns; this table
+// is the config/documentation layer + future admin-form driver, per the
+// doc's "high-value fields can be selectively promoted to real columns"
+// allowance). Seeded once per representative launch category.
+// ---------------------------------------------------------------------------
+type FieldDefSeed = {
+  industrySlug: string;
+  fieldKey: string;
+  label: string;
+  dataType: string;
+  required?: boolean;
+  optionsJson?: unknown;
+  section?: string;
+  displayOrder?: number;
+  helpText?: string;
+};
+
+const FIELD_DEFINITIONS: FieldDefSeed[] = [
+  // ---- hospitals_schema (seeded on the "hospitals" category; clinics/
+  // diagnostic-labs reuse the same extension per the taxonomy note) ----
+  { industrySlug: "hospitals", fieldKey: "address", label: "Address", dataType: "text", section: "Location & type", displayOrder: 1 },
+  { industrySlug: "hospitals", fieldKey: "hospital_type", label: "Hospital type", dataType: "enum", optionsJson: ["general", "teaching", "specialist", "clinic", "diagnostic"], section: "Location & type", displayOrder: 2 },
+  { industrySlug: "hospitals", fieldKey: "ownership", label: "Ownership", dataType: "enum", optionsJson: ["public", "private", "faith-based", "NGO"], section: "Location & type", displayOrder: 3 },
+  { industrySlug: "hospitals", fieldKey: "year_established", label: "Year established", dataType: "number", section: "Location & type", displayOrder: 4 },
+  { industrySlug: "hospitals", fieldKey: "specialties", label: "Specialties", dataType: "multi-select", section: "Clinical detail", displayOrder: 5, helpText: "Implemented as tags, same mechanism as fintech tags" },
+  { industrySlug: "hospitals", fieldKey: "services", label: "Services", dataType: "multi-select", section: "Clinical detail", displayOrder: 6 },
+  { industrySlug: "hospitals", fieldKey: "bed_capacity", label: "Bed capacity", dataType: "number", section: "Clinical detail", displayOrder: 7 },
+  { industrySlug: "hospitals", fieldKey: "emergency_services", label: "Emergency services", dataType: "boolean", section: "Clinical detail", displayOrder: 8 },
+  { industrySlug: "hospitals", fieldKey: "facility_license_body", label: "Facility licence body", dataType: "text", section: "Facility licence & accreditation", displayOrder: 9, helpText: "e.g. HEFAMAA (Lagos State) — illustrative, confirm per source" },
+  { industrySlug: "hospitals", fieldKey: "facility_license_no", label: "Facility licence number", dataType: "text", section: "Facility licence & accreditation", displayOrder: 10 },
+  { industrySlug: "hospitals", fieldKey: "facility_license_link", label: "Facility licence link", dataType: "url", section: "Facility licence & accreditation", displayOrder: 11 },
+  { industrySlug: "hospitals", fieldKey: "accreditation", label: "Accreditation", dataType: "multi-select", optionsJson: ["NHIA", "SafeCare", "ISO 9001", "COHSASA", "JCI"], section: "Facility licence & accreditation", displayOrder: 12 },
+  { industrySlug: "hospitals", fieldKey: "accreditation_body", label: "Accrediting body", dataType: "text", section: "Facility licence & accreditation", displayOrder: 13 },
+  { industrySlug: "hospitals", fieldKey: "contact_phone", label: "Contact phone", dataType: "text", section: "Contact", displayOrder: 14, helpText: "E.164 preferred" },
+  { industrySlug: "hospitals", fieldKey: "contact_email", label: "Contact email", dataType: "text", section: "Contact", displayOrder: 15 },
+
+  // ---- fintech_schema (seeded on the "payments" category, representative
+  // of every fintech sub-category) ----
+  { industrySlug: "payments", fieldKey: "founding_year", label: "Founding year", dataType: "number", section: "Company basics", displayOrder: 1 },
+  { industrySlug: "payments", fieldKey: "hq_address", label: "HQ address", dataType: "text", section: "Company basics", displayOrder: 2 },
+  { industrySlug: "payments", fieldKey: "business_model", label: "Business model", dataType: "enum", optionsJson: ["B2B", "B2C", "B2B2C"], section: "Company basics", displayOrder: 3 },
+  { industrySlug: "payments", fieldKey: "employee_count", label: "Employee count", dataType: "enum", optionsJson: ["1-10", "11-50", "51-200", "201-500", "500+"], section: "Company basics", displayOrder: 4 },
+  { industrySlug: "payments", fieldKey: "regulator", label: "Regulator", dataType: "text", section: "Regulation", displayOrder: 5, helpText: "e.g. Central Bank of Nigeria — illustrative, confirm per source" },
+  { industrySlug: "payments", fieldKey: "license_type", label: "Licence type", dataType: "multi-select", optionsJson: ["Switching & Processing", "MMO", "PSSP", "PTSP", "PSB", "Super-Agent", "MFB"], section: "Regulation", displayOrder: 6 },
+  { industrySlug: "payments", fieldKey: "license_number", label: "Licence number", dataType: "text", section: "Regulation", displayOrder: 7 },
+  { industrySlug: "payments", fieldKey: "total_funding_raised", label: "Total funding raised", dataType: "currency", section: "Funding & valuation", displayOrder: 8, helpText: "Can be derived from Funding Rounds" },
+  { industrySlug: "payments", fieldKey: "funding_currency", label: "Funding currency", dataType: "enum", optionsJson: ["USD", "NGN", "EUR", "GBP"], section: "Funding & valuation", displayOrder: 9 },
+  { industrySlug: "payments", fieldKey: "valuation", label: "Valuation", dataType: "currency", section: "Funding & valuation", displayOrder: 10 },
+  { industrySlug: "payments", fieldKey: "valuation_date", label: "Valuation date", dataType: "date", section: "Funding & valuation", displayOrder: 11 },
+];
+
+// ---------------------------------------------------------------------------
+// S · Scores & Provenance — real, honest config: today's activity score is
+// 100% website-signal, so score_weights only has one component.
+// ---------------------------------------------------------------------------
+const DATA_SOURCES = [
+  { key: "self_hosted_website_check", name: "Self-hosted website reachability checker", kind: "manual", trustRank: 3, isPaid: false, lastRunAt: null as Date | null },
+  { key: "manual_web_research", name: "Manually verified web research (Claude, 2026-08-07)", kind: "manual", trustRank: 2, isPaid: false, lastRunAt: new Date() },
+  { key: "cbn_register", name: "CBN licensed operators register", kind: "registry", trustRank: 1, isPaid: false, rateLimitNote: "Not yet integrated — requires manual PDF/web parsing, see P · Ingestion & Population", lastRunAt: null as Date | null },
+  { key: "cac_registry", name: "CAC public search (registration verification)", kind: "registry", trustRank: 1, isPaid: false, rateLimitNote: "Not yet integrated — verification only, not bulk-enumerable, see P · Ingestion & Population", lastRunAt: null as Date | null },
+  { key: "hefamaa_register", name: "HEFAMAA Lagos health facilities register", kind: "registry", trustRank: 1, isPaid: false, rateLimitNote: "Not yet integrated — state-level, no single national list, see P · Ingestion & Population", lastRunAt: null as Date | null },
+];
+
+// ---------------------------------------------------------------------------
+// Listings — corrected/enriched per cited web research (see task doc).
+// ---------------------------------------------------------------------------
+type CustomFields = {
+  foundingYear?: number;
+  businessModel?: string;
+  employees?: string;
+  regulator?: string;
+  licenses?: string[];
+  totalFunding?: number;
+  valuation?: number | null;
+  valuationDate?: string | null;
+  investors?: { n: string; t: string }[];
+  rounds?: { r: string; d: string; a: number; c?: string; l: string; src?: string }[];
+  hospitalType?: string;
+  ownership?: string;
+  yearEstablished?: number | null;
+  bedCapacity?: number;
+  emergency?: boolean;
+  city?: string;
+  address?: string;
+  services?: string[];
+  accreditation?: string[];
+  accreditationBody?: string;
+  facilityBody?: string;
+  facilityNo?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+};
+
+type Founder = { name: string; role: string };
+
+type Listing = {
+  slug: string;
+  name: string;
+  logo: string;
+  color: string;
+  industrySlug: string; // leaf category slug in the new taxonomy
+  short: string;
+  long: string;
+  website: string;
+  socials: Record<string, string>;
+  regions: { state: string; primary?: boolean }[];
+  tags: string[];
+  verification: "verified" | "unverified" | "flagged";
+  status: string;
+  rating: { score: number; count: number; dist: number[] };
+  source: string;
+  lastVerified: string;
+  founders: Founder[];
+  cf: CustomFields;
 };
 
 const HERO: Record<string, string> = {
@@ -79,61 +292,6 @@ const HERO: Record<string, string> = {
   "duchess-international": "1586773860418-d37222d8fce3",
 };
 
-// ---------------------------------------------------------------------------
-// Listings — ported verbatim from the prototype's LISTINGS array.
-// ---------------------------------------------------------------------------
-
-// The per-category "custom_fields" blob — fintech and hospital rows each
-// only populate their own subset of these, the rest stay undefined.
-type CustomFields = {
-  foundingYear?: number;
-  businessModel?: string;
-  employees?: string;
-  regulator?: string;
-  licenses?: string[];
-  totalFunding?: number;
-  valuation?: number | null;
-  valuationDate?: string | null;
-  investors?: { n: string; t: string }[];
-  rounds?: { r: string; d: string; a: number; l: string }[];
-  hospitalType?: string;
-  ownership?: string;
-  yearEstablished?: number;
-  bedCapacity?: number;
-  emergency?: boolean;
-  city?: string;
-  address?: string;
-  services?: string[];
-  accreditation?: string[];
-  accreditationBody?: string;
-  facilityBody?: string;
-  facilityNo?: string;
-  contactPhone?: string;
-  contactEmail?: string;
-};
-
-type Listing = {
-  slug: string;
-  name: string;
-  logo: string;
-  color: string;
-  category: "fintech" | "healthcare";
-  sub: string;
-  short: string;
-  long: string;
-  website: string;
-  socials: Record<string, string>;
-  regions: { state: string; primary?: boolean }[];
-  tags: string[];
-  verification: "verified" | "unverified" | "flagged";
-  status: string;
-  rating: { score: number; count: number; dist: number[] };
-  source: string;
-  lastVerified: string;
-  founders: { name: string; role: string }[];
-  cf: CustomFields;
-};
-
 const LISTINGS: Listing[] = [
   // ---------------- FINTECH ----------------
   {
@@ -141,18 +299,13 @@ const LISTINGS: Listing[] = [
     name: "OPay",
     logo: "O",
     color: "#0F9D58",
-    category: "fintech",
-    sub: "Payments",
+    industrySlug: "payments",
     short: "Mobile money, payments and banking for everyday Africa.",
     long: "OPay lets millions send money, pay bills, buy airtime and access credit from a single app, backed by one of the continent's largest agent networks.",
     website: "https://opayweb.com",
     socials: { x: "#", linkedin: "#", instagram: "#" },
-    regions: [
-      { state: "lagos", primary: true },
-      { state: "fct" },
-      { state: "oyo" },
-    ],
-    tags: ["payment-gateway", "cross-border", "virtual-cards", "ussd"],
+    regions: [{ state: "lagos", primary: true }, { state: "fct" }, { state: "oyo" }],
+    tags: ["payment-gateway", "cross-border-payments", "virtual-cards", "ussd"],
     verification: "verified",
     status: "active",
     rating: { score: 4.6, count: 128, dist: [72, 18, 6, 2, 2] },
@@ -167,7 +320,7 @@ const LISTINGS: Listing[] = [
       licenses: ["Switching & Processing", "PSSP"],
       totalFunding: 570000000,
       valuation: 2000000000,
-      valuationDate: "2021-11",
+      valuationDate: "2021-08",
       investors: [
         { n: "SoftBank Vision Fund 2", t: "Growth" },
         { n: "Sequoia Capital China", t: "VC" },
@@ -175,7 +328,7 @@ const LISTINGS: Listing[] = [
         { n: "Redpoint China", t: "VC" },
       ],
       rounds: [
-        { r: "Series C", d: "2021-08", a: 400000000, l: "SoftBank Vision Fund 2" },
+        { r: "Series C", d: "2021-08-23", a: 400000000, c: "USD", l: "SoftBank Vision Fund 2", src: "https://techcabal.com/2021/08/23/led-by-softbank-nigerias-opay-raises-400m/" },
         { r: "Series B", d: "2019-11", a: 120000000, l: "Meituan / Sequoia Capital China" },
         { r: "Series A", d: "2019-06", a: 50000000, l: "Sequoia Capital China" },
       ],
@@ -186,14 +339,13 @@ const LISTINGS: Listing[] = [
     name: "Flutterwave",
     logo: "F",
     color: "#F5A623",
-    category: "fintech",
-    sub: "Payments",
+    industrySlug: "payments",
     short: "Payment infrastructure for businesses expanding across borders.",
     long: "Flutterwave provides APIs and tools that let businesses accept and make payments across Africa and beyond, from one integration.",
     website: "https://flutterwave.com",
     socials: { x: "#", linkedin: "#" },
     regions: [{ state: "lagos", primary: true }],
-    tags: ["payment-gateway", "cross-border", "multi-currency", "virtual-cards"],
+    tags: ["payment-gateway", "cross-border-payments", "multi-currency", "virtual-cards"],
     verification: "verified",
     status: "active",
     rating: { score: 4.5, count: 96, dist: [64, 22, 9, 3, 2] },
@@ -218,7 +370,7 @@ const LISTINGS: Listing[] = [
         { n: "B Capital", t: "VC" },
       ],
       rounds: [
-        { r: "Series D", d: "2022-02", a: 250000000, l: "B Capital / Alta Park" },
+        { r: "Series D", d: "2022-02-16", a: 250000000, c: "USD", l: "B Capital / Alta Park", src: "https://techcrunch.com/2022/02/16/african-fintech-flutterwave-triples-valuation-to-over-3b-after-250m-series-d" },
         { r: "Series C", d: "2021-03", a: 170000000, l: "Avenir Growth / Tiger Global" },
       ],
     },
@@ -228,14 +380,13 @@ const LISTINGS: Listing[] = [
     name: "Paystack",
     logo: "P",
     color: "#00C3F7",
-    category: "fintech",
-    sub: "Payments",
+    industrySlug: "payments",
     short: "Modern online payments for African merchants.",
     long: "Paystack helps businesses in Africa get paid by anyone, anywhere, with a developer-friendly stack acquired by Stripe in 2020.",
     website: "https://paystack.com",
     socials: { x: "#", linkedin: "#" },
     regions: [{ state: "lagos", primary: true }],
-    tags: ["payment-gateway", "pos", "multi-currency"],
+    tags: ["payment-gateway", "pos-terminals", "multi-currency"],
     verification: "verified",
     status: "active",
     rating: { score: 4.7, count: 151, dist: [78, 15, 4, 2, 1] },
@@ -248,20 +399,19 @@ const LISTINGS: Listing[] = [
     cf: {
       foundingYear: 2015,
       businessModel: "B2B",
-      employees: "201 - 500",
+      employees: "201-500",
       regulator: "Central Bank of Nigeria",
       licenses: ["PSSP"],
-      totalFunding: 11000000,
-      valuation: 200000000,
-      valuationDate: "2020-10",
+      totalFunding: 8000000,
+      valuation: null,
+      valuationDate: null,
       investors: [
         { n: "Stripe", t: "Corporate" },
         { n: "Visa", t: "Corporate" },
         { n: "Y Combinator", t: "Accelerator" },
       ],
       rounds: [
-        { r: "Acquisition", d: "2020-10", a: 200000000, l: "Stripe" },
-        { r: "Series A", d: "2018-08", a: 8000000, l: "Visa / Stripe" },
+        { r: "Series A", d: "2018-08", a: 8000000, c: "USD", l: "Stripe / Visa", src: "https://techcrunch.com/2020/10/15/daily-crunch-stripe-acquires-nigerias-paystack/" },
       ],
     },
   },
@@ -270,8 +420,7 @@ const LISTINGS: Listing[] = [
     name: "Carbon",
     logo: "C",
     color: "#5B34C4",
-    category: "fintech",
-    sub: "Lending",
+    industrySlug: "lending",
     short: "Digital bank and consumer lending in one app.",
     long: "Carbon offers instant loans, payments, savings and bill payments to consumers, one of the earliest digital lenders in Nigeria.",
     website: "https://getcarbon.co",
@@ -283,18 +432,23 @@ const LISTINGS: Listing[] = [
     rating: { score: 4.1, count: 64, dist: [48, 30, 12, 6, 4] },
     source: "Company disclosures",
     lastVerified: "2026-03-12",
-    founders: [{ name: "Nonso Eze", role: "Co-Founder & Group CEO" }],
+    founders: [{ name: "Chijioke Dozie", role: "Co-Founder & Group CEO" }, { name: "Ngozi Dozie", role: "Co-Founder" }],
     cf: {
       foundingYear: 2012,
       businessModel: "B2C",
-      employees: "51 - 200",
+      employees: "51-200",
       regulator: "Central Bank of Nigeria",
       licenses: ["MFB"],
-      totalFunding: 15000000,
+      totalFunding: 10000000,
       valuation: null,
       valuationDate: null,
-      investors: [{ n: "Netherlands DFI (FMO)", t: "PE" }],
-      rounds: [{ r: "Debt", d: "2021-05", a: 15000000, l: "Netherlands DFI (FMO)" }],
+      investors: [
+        { n: "NET1", t: "Corporate" },
+        { n: "Lendable", t: "PE" },
+      ],
+      rounds: [
+        { r: "Series A", d: "2020", a: 10000000, c: "USD", l: "NET1 / Lendable", src: "https://techpoint.africa/2020/02/18/carbon-disrupt-fund/" },
+      ],
     },
   },
   {
@@ -302,8 +456,7 @@ const LISTINGS: Listing[] = [
     name: "PiggyVest",
     logo: "Pv",
     color: "#0B60D3",
-    category: "fintech",
-    sub: "Wealthtech",
+    industrySlug: "wealthtech",
     short: "Savings and investment for everyday Nigerians.",
     long: "PiggyVest helps users save automatically and invest in vetted opportunities, a pioneer of the Nigerian personal-finance category.",
     website: "https://piggyvest.com",
@@ -322,17 +475,20 @@ const LISTINGS: Listing[] = [
     cf: {
       foundingYear: 2016,
       businessModel: "B2C",
-      employees: "51 - 200",
+      employees: "51-200",
       regulator: "SEC Nigeria",
       licenses: ["Fund/Portfolio Mgmt"],
-      totalFunding: 1100000,
+      totalFunding: 1150000,
       valuation: null,
       valuationDate: null,
       investors: [
         { n: "LeadPath Nigeria", t: "VC" },
         { n: "Village Capital", t: "Accelerator" },
+        { n: "Ventures Platform", t: "VC" },
       ],
-      rounds: [{ r: "Seed", d: "2018-01", a: 1100000, l: "LeadPath Nigeria" }],
+      rounds: [
+        { r: "seed", d: "2018-05-31", a: 1100000, c: "USD", l: "LeadPath Nigeria / Village Capital / Ventures Platform", src: "https://articles.connectnigeria.com/fin-tech-startup-piggybank-now-known-as-piggyvest/" },
+      ],
     },
   },
   {
@@ -340,10 +496,9 @@ const LISTINGS: Listing[] = [
     name: "Reliance Health",
     logo: "R",
     color: "#E0356F",
-    category: "fintech",
-    sub: "Insurtech",
+    industrySlug: "insurtech",
     short: "Affordable health insurance and telemedicine.",
-    long: "Reliance Health combines health insurance, telemedicine and clinics into one plan for individuals and employers across emerging markets.",
+    long: "Reliance Health combines health insurance, telemedicine and clinics into one plan for individuals and employers across emerging markets. Began operations in 2015 as the telemedicine startup \"Kangpe\" before rebranding.",
     website: "https://reliancehealth.com",
     socials: { linkedin: "#" },
     regions: [{ state: "lagos", primary: true }, { state: "fct" }],
@@ -353,11 +508,15 @@ const LISTINGS: Listing[] = [
     rating: { score: 4.2, count: 41, dist: [52, 28, 12, 5, 3] },
     source: "Company announcements",
     lastVerified: "2026-05-02",
-    founders: [{ name: "Bisi Fashola", role: "Co-Founder & CEO" }],
+    founders: [
+      { name: "Femi Kuti", role: "Co-Founder & CEO" },
+      { name: "Opeyemi Olumekun", role: "Co-Founder" },
+      { name: "Matthew Mayaki", role: "Co-Founder" },
+    ],
     cf: {
-      foundingYear: 2016,
+      foundingYear: 2015,
       businessModel: "B2B2C",
-      employees: "201 - 500",
+      employees: "201-500",
       regulator: "NAICOM",
       licenses: ["HMO"],
       totalFunding: 47000000,
@@ -368,7 +527,7 @@ const LISTINGS: Listing[] = [
         { n: "Partech", t: "VC" },
       ],
       rounds: [
-        { r: "Series B", d: "2022-06", a: 40000000, l: "General Atlantic" },
+        { r: "Series B", d: "2022-02-07", a: 40000000, c: "USD", l: "General Atlantic", src: "https://www.generalatlantic.com/media-article/reliance-health-raises-40m-in-series-b-led-by-general-atlantic/" },
         { r: "Series A", d: "2020-02", a: 7000000, l: "Partech" },
       ],
     },
@@ -380,14 +539,13 @@ const LISTINGS: Listing[] = [
     name: "Reddington Hospital",
     logo: "R",
     color: "#B42318",
-    category: "healthcare",
-    sub: "Specialist",
+    industrySlug: "hospitals",
     short: "Multi-specialty hospital in Victoria Island, Lagos.",
-    long: "Founded in 2006, Reddington is a tertiary multi-specialty hospital offering cardiology, oncology, surgery and a 24/7 emergency department.",
+    long: "Established in 2006 (with an earlier Cardiac Centre on the same site from 2001), Reddington is a tertiary multi-specialty hospital offering cardiology, oncology, surgery and a 24/7 emergency department.",
     website: "https://reddingtonhospital.com",
     socials: { instagram: "#", linkedin: "#" },
     regions: [{ state: "lagos", primary: true }],
-    tags: ["cardiology", "oncology", "surgery", "emergency", "imaging"],
+    tags: ["cardiology", "oncology", "surgery", "emergency", "diagnostics-imaging"],
     verification: "verified",
     status: "active",
     rating: { score: 4.3, count: 57, dist: [54, 28, 10, 5, 3] },
@@ -403,8 +561,8 @@ const LISTINGS: Listing[] = [
       city: "Victoria Island",
       address: "1 Reddington Cres, Victoria Island",
       services: ["ICU", "Dialysis", "Imaging", "Cath Lab"],
-      accreditation: ["SafeCare Level 4", "NHIA"],
-      accreditationBody: "SafeCare / PharmAccess",
+      accreditation: ["COHSASA", "JCI", "NHIS"],
+      accreditationBody: "COHSASA / Joint Commission International",
       facilityBody: "HEFAMAA (Lagos State)",
       facilityNo: "LAG/HEF/2019/00214",
       contactPhone: "+234 800 000 0000",
@@ -416,10 +574,9 @@ const LISTINGS: Listing[] = [
     name: "Lagoon Hospitals",
     logo: "L",
     color: "#0E7C86",
-    category: "healthcare",
-    sub: "General",
-    short: "JCI-accredited private hospital group in Lagos.",
-    long: "Lagoon Hospitals is a leading private healthcare group operating multiple facilities across Lagos, offering general and specialist care.",
+    industrySlug: "hospitals",
+    short: "JCI-accredited private hospital group in Lagos (now Iwosan Lagoon Hospitals).",
+    long: "Lagoon Hospitals is a leading private healthcare group operating multiple facilities across Lagos, offering general and specialist care. It was the first hospital in sub-Saharan Africa to receive JCI's Gold Seal of Approval, in 2011.",
     website: "https://lagoonhospitals.com",
     socials: { linkedin: "#" },
     regions: [{ state: "lagos", primary: true }],
@@ -433,7 +590,7 @@ const LISTINGS: Listing[] = [
     cf: {
       hospitalType: "general",
       ownership: "private",
-      yearEstablished: 1984,
+      yearEstablished: 1986,
       bedCapacity: 150,
       emergency: true,
       city: "Ikeja",
@@ -452,20 +609,19 @@ const LISTINGS: Listing[] = [
     name: "Nisa Premier Hospital",
     logo: "N",
     color: "#6D28D9",
-    category: "healthcare",
-    sub: "Specialist",
+    industrySlug: "hospitals",
     short: "Specialist hospital in Jabi, Abuja.",
-    long: "Nisa Premier is a specialist facility in Abuja known for maternity, fertility and surgical services in the Federal Capital Territory.",
+    long: "Nisa Premier is a specialist facility in Abuja known for fertility, maternity and surgical services in the Federal Capital Territory. It delivered Nigeria's first IVF baby (\"Baby Hannatu\") in February 1998.",
     website: "https://nisapremier.com",
     socials: { instagram: "#" },
     regions: [{ state: "fct", primary: true }],
-    tags: ["maternity", "surgery", "paediatrics"],
+    tags: ["maternity", "surgery", "paediatrics", "diagnostics-imaging", "emergency"],
     verification: "unverified",
     status: "active",
     rating: { score: 4.0, count: 33, dist: [44, 30, 15, 7, 4] },
     source: "Facility website",
     lastVerified: "2026-01-15",
-    founders: [{ name: "Dr. Musa Danladi", role: "Founder & Medical Director" }],
+    founders: [{ name: "Dr. Ibrahim Wada", role: "Founder & Medical Director" }],
     cf: {
       hospitalType: "specialist",
       ownership: "private",
@@ -473,8 +629,8 @@ const LISTINGS: Listing[] = [
       bedCapacity: 80,
       emergency: true,
       city: "Abuja",
-      address: "15 Nisa St, Jabi, Abuja",
-      services: ["Maternity", "Fertility", "Surgery"],
+      address: "15-21 Alex Ekwueme Way, Jabi, Abuja",
+      services: ["Maternity", "Fertility & Genetics", "Gynaecology", "Surgery", "Paediatrics & Neonatology", "Imaging/Radiology"],
       accreditation: ["NHIA"],
       accreditationBody: "NHIA",
       facilityBody: "FCT Health Regulatory (illustrative)",
@@ -488,14 +644,13 @@ const LISTINGS: Listing[] = [
     name: "First Cardiology Consultants",
     logo: "FC",
     color: "#B42318",
-    category: "healthcare",
-    sub: "Specialist",
+    industrySlug: "hospitals",
     short: "Dedicated cardiac care centre in Ikoyi, Lagos.",
-    long: "First Cardiology Consultants is a specialist cardiac centre offering diagnostics, catheterisation and cardiac surgery.",
+    long: "First Cardiology Consultants is a specialist cardiac centre established in 2008, offering diagnostics, catheterisation and cardiac surgery, and has grown into a broader multi-specialty facility.",
     website: "https://firstcardiologyconsultants.com",
     socials: {},
     regions: [{ state: "lagos", primary: true }],
-    tags: ["cardiology", "imaging", "surgery"],
+    tags: ["cardiology", "diagnostics-imaging", "surgery"],
     verification: "verified",
     status: "active",
     rating: { score: 4.6, count: 29, dist: [70, 20, 6, 2, 2] },
@@ -505,11 +660,11 @@ const LISTINGS: Listing[] = [
     cf: {
       hospitalType: "specialist",
       ownership: "private",
-      yearEstablished: 2013,
+      yearEstablished: 2008,
       bedCapacity: 24,
       emergency: false,
       city: "Ikoyi",
-      address: "Ikoyi, Lagos",
+      address: "20A Thompson Avenue, Ikoyi, Lagos",
       services: ["Cath Lab", "Echocardiography", "Cardiac Surgery"],
       accreditation: ["SafeCare"],
       accreditationBody: "SafeCare",
@@ -524,14 +679,13 @@ const LISTINGS: Listing[] = [
     name: "Duchess International Hospital",
     logo: "D",
     color: "#1D4ED8",
-    category: "healthcare",
-    sub: "Teaching",
-    short: "Tertiary hospital with medical training in Ikeja, Lagos.",
-    long: "Duchess International is a tertiary hospital combining multi-specialty care with clinical training and research in Ikeja.",
+    industrySlug: "hospitals",
+    short: "100-bed tertiary hospital in Ikeja GRA, Lagos.",
+    long: "Duchess International is a 100-bed tertiary hospital combining multi-specialty care — cardiology, orthopaedics, paediatrics, emergency medicine and diagnostic imaging — with clinical training and research in Ikeja.",
     website: "https://duchesshospital.com",
     socials: { linkedin: "#", instagram: "#" },
     regions: [{ state: "lagos", primary: true }],
-    tags: ["oncology", "surgery", "emergency", "dialysis", "imaging"],
+    tags: ["oncology", "surgery", "emergency", "dialysis", "diagnostics-imaging", "cardiology", "paediatrics"],
     verification: "verified",
     status: "active",
     rating: { score: 4.2, count: 38, dist: [50, 30, 12, 5, 3] },
@@ -541,12 +695,15 @@ const LISTINGS: Listing[] = [
     cf: {
       hospitalType: "teaching",
       ownership: "private",
-      yearEstablished: 2020,
+      // Could not verify a founding year for Duchess — left null rather than
+      // keeping the previous unverified "2020" placeholder. See task notes.
+      yearEstablished: null,
       bedCapacity: 100,
       emergency: true,
+      // Corrected: existing seed data had "145 Joel Ogunnaike St" (wrong).
       city: "Ikeja",
-      address: "145 Joel Ogunnaike St, Ikeja GRA",
-      services: ["Oncology", "Dialysis", "ICU", "Imaging"],
+      address: "22A Joel Ogunnaike Street, Ikeja GRA",
+      services: ["Oncology", "Dialysis", "ICU", "Imaging", "Orthopaedics"],
       accreditation: ["SafeCare", "ISO 9001"],
       accreditationBody: "SafeCare",
       facilityBody: "HEFAMAA (Lagos State)",
@@ -558,7 +715,38 @@ const LISTINGS: Listing[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Reviews — real-feeling, written for the review card-deck section.
+// FieldProvenance — only for facts backed by a real, citable URL from the
+// research pass. Everything else in LISTINGS above was corrected/enriched
+// without inventing a citation, per the task's instruction not to fabricate
+// provenance for uncited facts.
+// ---------------------------------------------------------------------------
+type ProvenanceSeed = { slug: string; fieldKey: string; valueText: string; sourceUrl: string; confidence: number };
+
+const FIELD_PROVENANCE: ProvenanceSeed[] = [
+  { slug: "opay", fieldKey: "total_funding_raised", valueText: "570000000", sourceUrl: "https://www.cbinsights.com/research/opay-series-c-funding/", confidence: 0.8 },
+  { slug: "opay", fieldKey: "funding_round:series_c", valueText: "Series C — $400M led by SoftBank Vision Fund 2, announced 2021-08-23, valuation $2B", sourceUrl: "https://techcabal.com/2021/08/23/led-by-softbank-nigerias-opay-raises-400m/", confidence: 0.85 },
+  { slug: "flutterwave", fieldKey: "total_funding_raised", valueText: "475000000", sourceUrl: "https://techcrunch.com/2022/02/16/african-fintech-flutterwave-triples-valuation-to-over-3b-after-250m-series-d", confidence: 0.8 },
+  { slug: "flutterwave", fieldKey: "funding_round:series_d", valueText: "Series D — $250M led by B Capital Group, announced 2022-02-16, valuation over $3B", sourceUrl: "https://techcrunch.com/2022/02/16/african-fintech-flutterwave-triples-valuation-to-over-3b-after-250m-series-d", confidence: 0.85 },
+  { slug: "paystack", fieldKey: "funding_round:series_a", valueText: "Series A — $8M led by Stripe with Visa and Y Combinator, announced 2018-08; acquired by Stripe Oct 2020 for a reported $200M+", sourceUrl: "https://techcrunch.com/2020/10/15/daily-crunch-stripe-acquires-nigerias-paystack/", confidence: 0.8 },
+  { slug: "carbon", fieldKey: "founding_year", valueText: "2012 (as \"One Credit\", rebranded Paylater then Carbon in 2019)", sourceUrl: "https://techpoint.africa/2020/02/18/carbon-disrupt-fund/", confidence: 0.75 },
+  { slug: "carbon", fieldKey: "total_funding_raised", valueText: "~10000000 across a 2020 Series A with NET1 and Lendable, plus Google Launchpad Accelerator support", sourceUrl: "https://techpoint.africa/2020/02/18/carbon-disrupt-fund/", confidence: 0.7 },
+  { slug: "piggyvest", fieldKey: "total_funding_raised", valueText: "~1150000 across two seed-stage rounds: ~$1M led by LeadPath Nigeria (2018-05-31) with Village Capital and Ventures Platform, plus an earlier separate $50K Village Capital round", sourceUrl: "https://articles.connectnigeria.com/fin-tech-startup-piggybank-now-known-as-piggyvest/", confidence: 0.75 },
+  { slug: "reliance-hmo", fieldKey: "funding_round:series_b", valueText: "Series B — $40M led by General Atlantic, announced 2022-02-07 (General Atlantic's first African tech investment)", sourceUrl: "https://www.generalatlantic.com/media-article/reliance-health-raises-40m-in-series-b-led-by-general-atlantic/", confidence: 0.85 },
+  { slug: "reddington-hospital", fieldKey: "year_established", valueText: "2006 (earlier Cardiac Centre on the same site from 2001)", sourceUrl: "https://en.wikipedia.org/wiki/Reddington_Hospital", confidence: 0.7 },
+  { slug: "reddington-hospital", fieldKey: "accreditation", valueText: "COHSASA (July 2012 — first independent hospital in Nigeria to receive it), JCI, NHIS", sourceUrl: "https://en.wikipedia.org/wiki/Reddington_Hospital", confidence: 0.7 },
+  { slug: "lagoon-hospitals", fieldKey: "year_established", valueText: "1986", sourceUrl: "https://en.wikipedia.org/wiki/Lagoon_Hospitals", confidence: 0.7 },
+  { slug: "lagoon-hospitals", fieldKey: "accreditation", valueText: "First hospital in sub-Saharan Africa to receive JCI's Gold Seal of Approval, in 2011", sourceUrl: "https://en.wikipedia.org/wiki/Lagoon_Hospitals", confidence: 0.7 },
+  { slug: "nisa-premier", fieldKey: "year_established", valueText: "1996, founded by Dr. Ibrahim Wada, originally in Gwagwalada (FCT)", sourceUrl: "https://nisa.com.ng/about/", confidence: 0.75 },
+  { slug: "nisa-premier", fieldKey: "address", valueText: "15-21 Alex Ekwueme Way, Jabi, Abuja (relocated from Gwagwalada in 2000)", sourceUrl: "https://nisa.com.ng/about/", confidence: 0.75 },
+  { slug: "nisa-premier", fieldKey: "specialties", valueText: "Fertility & Genetics, Gynaecology, Surgery, Maternity Care, Paediatrics & Neonatology, Accidents & Emergency, Imaging/Radiology, Dental, Eye", sourceUrl: "https://nisa.com.ng/about/", confidence: 0.75 },
+  { slug: "first-cardiology", fieldKey: "year_established", valueText: "2008", sourceUrl: "https://www.firstcardiology.org/", confidence: 0.7 },
+  { slug: "first-cardiology", fieldKey: "address", valueText: "20A Thompson Avenue, Ikoyi, Lagos", sourceUrl: "https://www.firstcardiology.org/", confidence: 0.7 },
+];
+
+// ---------------------------------------------------------------------------
+// Reviews — unchanged content, now seeded with status="published" (demo
+// content meant to populate the review-deck UI, not content awaiting
+// moderation) and userId left null (no real accounts behind them).
 // ---------------------------------------------------------------------------
 const REVIEWS: Record<string, { authorName: string; authorRole: string; rating: number; title: string; body: string }[]> = {
   opay: [
@@ -690,45 +878,62 @@ const REVIEWS: Record<string, { authorName: string; authorRole: string; rating: 
   ],
 };
 
+// Real, citable award (see task notes) — the only Award row seeded.
+const DUCHESS_AWARD = {
+  title: "Best Tertiary Private Hospital in Nigeria",
+  awardedBy: "National Healthcare Excellence Awards (NHEA)",
+  sourceUrl: "https://naijasabi.com.ng/best-private-hospitals-lagos-2026/",
+  awardedOn: null as Date | null, // year not confirmed — not guessed
+};
+
 async function main() {
   console.log("Seeding IndexOne database...");
 
-  // ---- Regions ----
+  // ---- Regions (tree) ----
   const regionBySlug = new Map<string, string>();
   for (const r of REGIONS) {
+    const parentId = r.parentSlug ? regionBySlug.get(r.parentSlug) : undefined;
     const row = await prisma.region.upsert({
       where: { slug: r.slug },
-      update: { name: r.name },
-      create: { slug: r.slug, name: r.name },
+      update: { name: r.name, level: r.level, isoCode: r.isoCode ?? null, note: r.note ?? null, parentId: parentId ?? null },
+      create: { slug: r.slug, name: r.name, level: r.level, isoCode: r.isoCode ?? null, note: r.note ?? null, parentId: parentId ?? null },
     });
     regionBySlug.set(r.slug, row.id);
   }
 
-  // ---- Industries (vertical + sub-vertical) ----
-  const industryBySub = new Map<string, string>(); // "fintech:Payments" -> id
-  const industryByVertical = new Map<string, string>();
+  // ---- Industries (tree) ----
+  const industryBySlug = new Map<string, string>();
   for (const ind of INDUSTRIES) {
-    const parent = await prisma.industry.upsert({
+    const parentId = ind.parentSlug ? industryBySlug.get(ind.parentSlug) : undefined;
+    const row = await prisma.industry.upsert({
       where: { slug: ind.slug },
-      update: { name: ind.name, icon: ind.icon, accent: ind.accent },
-      create: { slug: ind.slug, name: ind.name, icon: ind.icon, accent: ind.accent },
+      update: {
+        name: ind.name,
+        level: ind.level,
+        icon: ind.icon ?? null,
+        accent: ind.accent ?? null,
+        schemaExtension: ind.schemaExtension ?? null,
+        note: ind.note ?? null,
+        parentId: parentId ?? null,
+      },
+      create: {
+        slug: ind.slug,
+        name: ind.name,
+        level: ind.level,
+        icon: ind.icon ?? null,
+        accent: ind.accent ?? null,
+        schemaExtension: ind.schemaExtension ?? null,
+        note: ind.note ?? null,
+        parentId: parentId ?? null,
+      },
     });
-    industryByVertical.set(ind.slug, parent.id);
-    for (const sub of ind.subs) {
-      const subSlug = `${ind.slug}-${sub.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-      const subRow = await prisma.industry.upsert({
-        where: { slug: subSlug },
-        update: { name: sub, parentId: parent.id },
-        create: { slug: subSlug, name: sub, parentId: parent.id },
-      });
-      industryBySub.set(`${ind.slug}:${sub}`, subRow.id);
-    }
+    industryBySlug.set(ind.slug, row.id);
   }
 
   // ---- Features / tags ----
   const featureBySlug = new Map<string, string>();
   for (const vertical of Object.keys(TAGS)) {
-    const industryId = industryByVertical.get(vertical)!;
+    const industryId = industryBySlug.get(vertical)!;
     for (const t of TAGS[vertical]) {
       const row = await prisma.feature.upsert({
         where: { slug: t.slug },
@@ -739,9 +944,77 @@ async function main() {
     }
   }
 
+  // ---- Field definitions (registry) ----
+  for (const fd of FIELD_DEFINITIONS) {
+    const industryId = industryBySlug.get(fd.industrySlug);
+    if (!industryId) continue;
+    await prisma.fieldDefinition.upsert({
+      where: { industryId_fieldKey: { industryId, fieldKey: fd.fieldKey } },
+      update: {
+        label: fd.label,
+        dataType: fd.dataType,
+        required: fd.required ?? false,
+        optionsJson: fd.optionsJson ?? undefined,
+        section: fd.section ?? null,
+        displayOrder: fd.displayOrder ?? null,
+        helpText: fd.helpText ?? null,
+      },
+      create: {
+        industryId,
+        fieldKey: fd.fieldKey,
+        label: fd.label,
+        dataType: fd.dataType,
+        required: fd.required ?? false,
+        optionsJson: fd.optionsJson ?? undefined,
+        section: fd.section ?? null,
+        displayOrder: fd.displayOrder ?? null,
+        helpText: fd.helpText ?? null,
+      },
+    });
+  }
+
+  // ---- Data sources ----
+  const dataSourceBySlug = new Map<string, string>();
+  for (const ds of DATA_SOURCES) {
+    const row = await prisma.dataSource.upsert({
+      where: { key: ds.key },
+      update: {
+        name: ds.name,
+        kind: ds.kind,
+        trustRank: ds.trustRank,
+        isPaid: ds.isPaid,
+        rateLimitNote: "rateLimitNote" in ds ? (ds as { rateLimitNote?: string }).rateLimitNote ?? null : null,
+        lastRunAt: ds.lastRunAt,
+      },
+      create: {
+        key: ds.key,
+        name: ds.name,
+        kind: ds.kind,
+        trustRank: ds.trustRank,
+        isPaid: ds.isPaid,
+        rateLimitNote: "rateLimitNote" in ds ? (ds as { rateLimitNote?: string }).rateLimitNote ?? null : null,
+        lastRunAt: ds.lastRunAt,
+      },
+    });
+    dataSourceBySlug.set(ds.key, row.id);
+  }
+  const manualResearchSourceId = dataSourceBySlug.get("manual_web_research")!;
+
+  // ---- score_weights v1 — 100% website-signal today, honestly ----
+  await prisma.scoreWeight.upsert({
+    where: { version_scoreType_component: { version: "v1", scoreType: "activity", component: "website" } },
+    update: { weight: 1.0, effectiveFrom: new Date("2026-08-07") },
+    create: {
+      version: "v1",
+      scoreType: "activity",
+      component: "website",
+      weight: 1.0,
+      effectiveFrom: new Date("2026-08-07"),
+    },
+  });
+
   // ---- Investors (deduped across all companies) ----
   const investorBySlug = new Map<string, string>();
-  const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   for (const l of LISTINGS) {
     const investors = l.cf.investors ?? [];
     for (const inv of investors) {
@@ -758,56 +1031,59 @@ async function main() {
 
   // ---- Companies + nested data ----
   for (const l of LISTINGS) {
-    const industryId = industryBySub.get(`${l.category}:${l.sub}`);
-    if (!industryId) throw new Error(`Missing industry for ${l.slug} (${l.category}:${l.sub})`);
+    const industryId = industryBySlug.get(l.industrySlug);
+    if (!industryId) throw new Error(`Missing industry for ${l.slug} (${l.industrySlug})`);
 
     const cf = l.cf;
 
+    const companyData = {
+      name: l.name,
+      logoInitials: l.logo,
+      logoColor: l.color,
+      industryId,
+      shortDescription: l.short,
+      longDescription: l.long,
+      website: l.website,
+      heroImageId: HERO[l.slug] ?? null,
+      socials: l.socials,
+      registrationBody: "CAC (Nigeria)",
+      foundingYear: cf.foundingYear ?? null,
+      employeeRange: cf.employees ?? null,
+      businessModel: cf.businessModel ?? null,
+      regulator: cf.regulator ?? null,
+      status: l.status,
+      verification: l.verification,
+      source: l.source,
+      lastVerifiedAt: new Date(l.lastVerified),
+      ratingScore: l.rating.score,
+      ratingCount: l.rating.count,
+      ratingDist: l.rating.dist,
+      totalFunding: cf.totalFunding ?? null,
+      valuation: cf.valuation ?? null,
+      valuationDate: cf.valuationDate ?? null,
+      licenses: cf.licenses ?? undefined,
+      hospitalType: cf.hospitalType ?? null,
+      ownership: cf.ownership ?? null,
+      yearEstablished: cf.yearEstablished ?? null,
+      bedCapacity: cf.bedCapacity ?? null,
+      emergency: cf.emergency ?? null,
+      city: cf.city ?? null,
+      address: cf.address ?? null,
+      services: cf.services ?? undefined,
+      accreditation: cf.accreditation ?? undefined,
+      accreditationBody: cf.accreditationBody ?? null,
+      facilityBody: cf.facilityBody ?? null,
+      facilityNo: cf.facilityNo ?? null,
+      contactPhone: cf.contactPhone ?? null,
+      contactEmail: cf.contactEmail ?? null,
+    };
+
     const company = await prisma.company.upsert({
       where: { slug: l.slug },
-      update: {},
-      create: {
-        slug: l.slug,
-        name: l.name,
-        logoInitials: l.logo,
-        logoColor: l.color,
-        industryId,
-        shortDescription: l.short,
-        longDescription: l.long,
-        website: l.website,
-        heroImageId: HERO[l.slug] ?? null,
-        socials: l.socials,
-        foundingYear: cf.foundingYear ?? null,
-        employeeRange: cf.employees ?? null,
-        businessModel: cf.businessModel ?? null,
-        regulator: cf.regulator ?? null,
-        status: l.status,
-        verification: l.verification,
-        source: l.source,
-        lastVerifiedAt: new Date(l.lastVerified),
-        ratingScore: l.rating.score,
-        ratingCount: l.rating.count,
-        ratingDist: l.rating.dist,
-        totalFunding: cf.totalFunding ?? null,
-        valuation: cf.valuation ?? null,
-        valuationDate: cf.valuationDate ?? null,
-        licenses: cf.licenses ?? undefined,
-        hospitalType: cf.hospitalType ?? null,
-        ownership: cf.ownership ?? null,
-        yearEstablished: cf.yearEstablished ?? null,
-        bedCapacity: cf.bedCapacity ?? null,
-        emergency: cf.emergency ?? null,
-        city: cf.city ?? null,
-        address: cf.address ?? null,
-        services: cf.services ?? undefined,
-        accreditation: cf.accreditation ?? undefined,
-        accreditationBody: cf.accreditationBody ?? null,
-        facilityBody: cf.facilityBody ?? null,
-        facilityNo: cf.facilityNo ?? null,
-        contactPhone: cf.contactPhone ?? null,
-        contactEmail: cf.contactEmail ?? null,
-        tags: { connect: l.tags.map((slug) => ({ id: featureBySlug.get(slug)! })) },
-      },
+      // Re-running the seed repairs previously-seeded rows (repointed
+      // category slugs, the Duchess address fix, corrected funding figures).
+      update: { ...companyData, tags: { set: l.tags.map((slug) => ({ id: featureBySlug.get(slug)! })) } },
+      create: { slug: l.slug, ...companyData, tags: { connect: l.tags.map((slug) => ({ id: featureBySlug.get(slug)! })) } },
     });
 
     // Regions
@@ -821,16 +1097,25 @@ async function main() {
       });
     }
 
-    // Founders
+    // Founders -> Person + ListingPerson
     for (const f of l.founders) {
-      const existing = await prisma.person.findFirst({
-        where: { companyId: company.id, name: f.name },
+      const personSlug = slugify(f.name);
+      const person = await prisma.person.upsert({
+        where: { slug: personSlug },
+        update: { name: f.name },
+        create: { slug: personSlug, name: f.name },
       });
-      if (!existing) {
-        await prisma.person.create({
-          data: { companyId: company.id, name: f.name, role: f.role },
-        });
-      }
+      await prisma.listingPerson.upsert({
+        where: { personId_companyId_role: { personId: person.id, companyId: company.id, role: "founder" } },
+        update: { isCurrent: true },
+        create: {
+          personId: person.id,
+          companyId: company.id,
+          role: "founder",
+          isCurrent: true,
+          startDate: null, // no real per-person founding dates available, only company founding years
+        },
+      });
     }
 
     // Funding rounds + investor linkage (fintech only)
@@ -850,9 +1135,17 @@ async function main() {
             round: round.r,
             date: round.d,
             amount: round.a,
+            currency: round.c ?? null,
             leadInvestor: round.l,
+            sourceUrl: round.src ?? null,
           },
         }));
+      if (existingRound && (round.c || round.src)) {
+        await prisma.fundingRound.update({
+          where: { id: roundRow.id },
+          data: { currency: round.c ?? existingRound.currency, sourceUrl: round.src ?? existingRound.sourceUrl },
+        });
+      }
 
       const parts = round.l.split("/").map((p) => p.trim());
       for (const part of parts) {
@@ -893,7 +1186,7 @@ async function main() {
       }
     }
 
-    // Reviews
+    // Reviews — demo content, published (not awaiting moderation), no real user.
     const reviews = REVIEWS[l.slug] ?? [];
     for (const rv of reviews) {
       const existingReview = await prisma.review.findFirst({
@@ -908,6 +1201,49 @@ async function main() {
             rating: rv.rating,
             title: rv.title,
             body: rv.body,
+            status: "published",
+          },
+        });
+      } else if (existingReview.status !== "published") {
+        await prisma.review.update({ where: { id: existingReview.id }, data: { status: "published" } });
+      }
+    }
+
+    // Field provenance — only cited facts.
+    const provenance = FIELD_PROVENANCE.filter((p) => p.slug === l.slug);
+    for (const p of provenance) {
+      const existing = await prisma.fieldProvenance.findFirst({
+        where: { companyId: company.id, fieldKey: p.fieldKey, sourceId: manualResearchSourceId },
+      });
+      if (!existing) {
+        await prisma.fieldProvenance.create({
+          data: {
+            companyId: company.id,
+            fieldKey: p.fieldKey,
+            valueText: p.valueText,
+            sourceId: manualResearchSourceId,
+            sourceUrl: p.sourceUrl,
+            confidence: p.confidence,
+            fetchedAt: new Date(),
+            isWinning: true,
+          },
+        });
+      }
+    }
+
+    // Duchess's real, citable NHEA award.
+    if (l.slug === "duchess-international") {
+      const existingAward = await prisma.award.findFirst({
+        where: { companyId: company.id, title: DUCHESS_AWARD.title },
+      });
+      if (!existingAward) {
+        await prisma.award.create({
+          data: {
+            companyId: company.id,
+            title: DUCHESS_AWARD.title,
+            awardedBy: DUCHESS_AWARD.awardedBy,
+            sourceUrl: DUCHESS_AWARD.sourceUrl,
+            awardedOn: DUCHESS_AWARD.awardedOn,
           },
         });
       }
@@ -919,10 +1255,15 @@ async function main() {
     regions: await prisma.region.count(),
     industries: await prisma.industry.count(),
     features: await prisma.feature.count(),
+    fieldDefinitions: await prisma.fieldDefinition.count(),
+    dataSources: await prisma.dataSource.count(),
     investors: await prisma.investor.count(),
     fundingRounds: await prisma.fundingRound.count(),
     people: await prisma.person.count(),
+    listingPeople: await prisma.listingPerson.count(),
     reviews: await prisma.review.count(),
+    fieldProvenance: await prisma.fieldProvenance.count(),
+    awards: await prisma.award.count(),
   };
   console.log("Seed complete:", counts);
 }
