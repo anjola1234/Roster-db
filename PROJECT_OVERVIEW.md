@@ -82,12 +82,26 @@ Everything lives in one Postgres database. The core entities:
 
 ## 5b. The admin dashboard
 
-Everything at `/admin` requires a logged-in account with `role = "admin"` on the `User` table. That column is never written by any HTTP endpoint — the only way to grant it is from the command line by whoever holds the database credentials:
+Everything at `/admin` requires a logged-in account with `role = "admin"` on the `User` table. That column is never written by any HTTP endpoint — the only way to grant it is from the command line by whoever holds the database credentials.
+
+**Quickest way in (local dev):**
+
+```bash
+npm run seed-admin
+```
+
+That creates `admin@indexone.test` / `indexone-admin-2026` and marks it admin. Log in at `/login` and the **Admin** link appears in the nav. Re-running it resets the password, so it doubles as a recovery hatch when someone forgets it.
+
+**These demo credentials are public** — they're in this file and in the repo history. `seed-admin` therefore refuses to create them when `NODE_ENV=production`, because a known email and password with full moderation rights on a live public directory means anyone who reads the source can edit, publish or delete every listing.
+
+**For a real deployment**, sign up through the app and grant the role explicitly:
 
 ```bash
 npm run make-admin -- someone@example.com     # grant
 npm run make-admin -- someone@example.com --revoke
 ```
+
+(Or set your own `ADMIN_EMAIL` and `ADMIN_PASSWORD` and run `seed-admin` — with those set it works in production too, since the credential is no longer in the codebase.)
 
 Non-admins are redirected away from `/admin` and get a 403 from every `/api/admin/*` endpoint. The check is a live database lookup on every page and request, not a cached claim in a cookie.
 
@@ -160,7 +174,9 @@ npm run dev
 
 **Manually run the website activity check:** `npm run check-activity`
 
-**Grant yourself admin access:** `npm run make-admin -- you@example.com` (the account must already exist — sign up first)
+**Get into the admin dashboard locally:** `npm run seed-admin`, then log in as `admin@indexone.test` / `indexone-admin-2026`
+
+**Grant an existing account admin access:** `npm run make-admin -- you@example.com` — use this one for anything deployed
 
 ---
 
