@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "postinstall": "prisma generate",
-    "build": "prisma migrate deploy && next build",
+    "build": "prisma migrate deploy && npm run seed-admin && next build",
     "start": "next start",
     "lint": "eslint",
     "check-activity": "tsx scripts/check-activity.ts",
