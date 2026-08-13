@@ -4,6 +4,18 @@ import type { Prisma } from "@/generated/prisma/client";
 // ---------------------------------------------------------------------------
 // Shared "full company" include used by directory + detail views.
 // ---------------------------------------------------------------------------
+/**
+ * Only "active" listings are public.
+ *
+ * This filter was missing entirely before the admin dashboard existed, which
+ * meant every public submission (created with status="pending") was already
+ * live on the directory the moment it was submitted — the opposite of what
+ * PROJECT_OVERVIEW section 5 described. Drafts, pending submissions and
+ * archived listings are now all excluded from public reads; the admin views
+ * use their own queries in adminQueries.ts and are unaffected.
+ */
+export const PUBLIC_STATUS = "active";
+
 export const companyInclude = {
   industry: { include: { parent: true } },
   regions: { include: { region: true } },
@@ -26,7 +38,7 @@ export type CompanyFilters = {
 };
 
 function buildWhere(filters: CompanyFilters): Prisma.CompanyWhereInput {
-  const AND: Prisma.CompanyWhereInput[] = [];
+  const AND: Prisma.CompanyWhereInput[] = [{ status: PUBLIC_STATUS }];
 
   if (filters.industry) {
     AND.push({ industry: { slug: filters.industry } });
@@ -60,7 +72,7 @@ function buildWhere(filters: CompanyFilters): Prisma.CompanyWhereInput {
     });
   }
 
-  return AND.length ? { AND } : {};
+  return { AND };
 }
 
 export async function getCompanies(filters: CompanyFilters = {}) {
@@ -87,7 +99,13 @@ export function sortCompanies(rows: CompanyFull[], sort: string | undefined) {
 }
 
 export async function getCompanyBySlug(slug: string): Promise<CompanyFull | null> {
-  return prisma.company.findUnique({ where: { slug }, include: companyInclude });
+  // findFirst, not findUnique: the status filter means a draft/pending listing
+  // resolves to null here and the public page 404s. Admins edit those through
+  // /admin/companies/[id], which reads them directly.
+  return prisma.company.findFirst({
+    where: { slug, status: PUBLIC_STATUS },
+    include: companyInclude,
+  });
 }
 
 export async function getRelatedCompanies(company: CompanyFull, limit = 3) {
@@ -95,6 +113,7 @@ export async function getRelatedCompanies(company: CompanyFull, limit = 3) {
     where: {
       industry: { parentId: company.industry.parentId ?? company.industry.id },
       slug: { not: company.slug },
+      status: PUBLIC_STATUS,
     },
     include: companyInclude,
     take: limit,
@@ -133,7 +152,7 @@ export async function getFeatures(verticalSlug?: string) {
 export async function getEcosystemStats() {
   const [companies, reviews, investors, regions, industries, people, features] =
     await Promise.all([
-      prisma.company.count(),
+      prisma.company.count({ where: { status: PUBLIC_STATUS } }),
       prisma.review.count({ where: { status: "published" } }),
       prisma.investor.count(),
       // "States" on the homepage — the state level of the region tree, not
@@ -150,6 +169,7 @@ export async function getEcosystemStats() {
 
 export async function getTopCompaniesPreview(limit = 10) {
   const rows = await prisma.company.findMany({
+    where: { status: PUBLIC_STATUS },
     include: companyInclude,
     orderBy: [{ verification: "desc" }, { name: "asc" }],
     take: limit,
@@ -159,7 +179,9 @@ export async function getTopCompaniesPreview(limit = 10) {
 
 export async function getReviewDeck(limit = 15) {
   return prisma.review.findMany({
-    where: { status: "published" },
+    // Both halves matter: a published review attached to a draft or archived
+    // listing would otherwise surface the listing's name on the homepage.
+    where: { status: "published", company: { status: PUBLIC_STATUS } },
     include: { company: true },
     orderBy: { createdAt: "desc" },
     take: limit,
@@ -168,6 +190,7 @@ export async function getReviewDeck(limit = 15) {
 
 export async function getHeroFragments(limit = 18) {
   return prisma.company.findMany({
+    where: { status: PUBLIC_STATUS },
     select: {
       name: true,
       logoInitials: true,

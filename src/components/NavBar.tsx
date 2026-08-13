@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 type Props = {
-  user: { id: string; email: string; name: string } | null;
+  user: { id: string; email: string; name: string; role: string } | null;
 };
 
 export default function NavBar({ user }: Props) {
@@ -57,6 +57,11 @@ export default function NavBar({ user }: Props) {
             <Link className="nav-link topbar-nav" href="/directory">
               Explore Directory
             </Link>
+            {user?.role === "admin" && (
+              <Link className="nav-link topbar-nav" href="/admin">
+                Admin
+              </Link>
+            )}
             {user ? (
               <form action="/api/logout" method="post">
                 <button className="btn btn-ghost" type="submit">

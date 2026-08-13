@@ -58,5 +58,12 @@ export async function getCurrentUser() {
     await prisma.session.delete({ where: { id: session.id } }).catch(() => {});
     return null;
   }
-  return { id: session.user.id, email: session.user.email, name: session.user.name };
+  return {
+    id: session.user.id,
+    email: session.user.email,
+    name: session.user.name,
+    role: session.user.role,
+  };
 }
+
+export type SessionUser = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;

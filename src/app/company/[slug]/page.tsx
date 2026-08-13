@@ -6,6 +6,9 @@ import { heroImageUrl, money, formatDate, timeAgo } from "@/lib/format";
 import ScrollSpyToc from "@/components/ScrollSpyToc";
 import ReviewForm from "@/components/ReviewForm";
 import ActivityBadge from "@/components/ActivityBadge";
+import ClaimListingButton from "@/components/ClaimListingButton";
+import { getCurrentUser } from "@/lib/session";
+import { prisma } from "@/lib/prisma";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
@@ -62,6 +65,17 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
   if (!company) notFound();
 
   const related = await getRelatedCompanies(company, 3);
+
+  // Whether this viewer already has a claim in flight on this listing, so the
+  // claim widget can show state rather than letting them submit a duplicate.
+  const viewer = await getCurrentUser();
+  const existingClaim = viewer
+    ? await prisma.listingClaim.findFirst({
+        where: { companyId: company.id, userId: viewer.id, status: { in: ["pending", "approved"] } },
+        select: { status: true },
+      })
+    : null;
+
   const verticalSlug = company.industry.parent?.slug ?? company.industry.slug;
   const verticalName = company.industry.parent?.name ?? company.industry.name;
   const bf = bestForBlock(company);
@@ -127,6 +141,11 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
               <a className="btn btn-primary" href={company.website} target="_blank" rel="noopener noreferrer">
                 Visit website ↗
               </a>
+              <ClaimListingButton
+                companySlug={company.slug}
+                signedIn={Boolean(viewer)}
+                existingStatus={existingClaim?.status ?? null}
+              />
             </div>
           </div>
         </div>

@@ -607,6 +607,11 @@ model User {
   email        String    @unique
   passwordHash String
   name         String
+  // "user" | "admin". Plain string rather than a Prisma enum, matching the
+  // convention already used for Company.status / Review.status above.
+  // Granted out-of-band (`npm run make-admin -- email@example.com`), never
+  // through signup — nothing in the public API can ever write this field.
+  role         String    @default("user")
   createdAt    DateTime  @default(now())
   sessions     Session[]
   reviews      Review[]

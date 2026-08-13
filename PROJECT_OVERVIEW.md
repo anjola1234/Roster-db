@@ -72,9 +72,44 @@ Everything lives in one Postgres database. The core entities:
 
 **Accounts** — `/signup` and `/login` are real: passwords are hashed (never stored in plain text), sessions use secure cookies.
 
-**`/list-your-product`** — anyone can submit a company. It goes in as `unverified`/`pending` — there's currently **no review screen** for a human to approve these; they just sit in the database (see section 7, this is a known gap).
+**`/list-your-product`** — anyone can submit a company. It goes in as `unverified`/`pending` and is **not publicly visible** until an admin approves it in the dashboard (see section 5b).
 
-**Reviews** — anyone can leave a review on a company page. It publishes **immediately**, no moderation step yet.
+**Reviews** — a signed-in user can leave a review on a company page. It's held as `pending` and only appears once an admin publishes it.
+
+**`/admin`** — the operations dashboard. See section 5b.
+
+---
+
+## 5b. The admin dashboard
+
+Everything at `/admin` requires a logged-in account with `role = "admin"` on the `User` table. That column is never written by any HTTP endpoint — the only way to grant it is from the command line by whoever holds the database credentials:
+
+```bash
+npm run make-admin -- someone@example.com     # grant
+npm run make-admin -- someone@example.com --revoke
+```
+
+Non-admins are redirected away from `/admin` and get a 403 from every `/api/admin/*` endpoint. The check is a live database lookup on every page and request, not a cached claim in a cookie.
+
+**What it does:**
+
+| Screen | Purpose |
+|---|---|
+| `/admin` | Queue counts and the oldest items waiting on you |
+| `/admin/companies` | Browse, search and filter every listing; verify / archive / delete inline |
+| `/admin/companies/new` | Full company form — base fields plus fintech or hospital fields depending on the category picked |
+| `/admin/companies/[id]` | The same form, prefilled, for editing |
+| `/admin/companies/import` | CSV bulk import, with a dry-run check before anything is written |
+| `/admin/submissions` | Public submissions awaiting approval, oldest first |
+| `/admin/claims` | People claiming they represent a listed company |
+| `/admin/reviews` | Review moderation, tabbed by status |
+
+**Ownership claims.** `ListingClaim` existed in the schema but nothing wrote to it, so the queue would have been permanently empty. There's now a "Claim this listing" control on each company page (`POST /api/claims`) that feeds it. Approving a claim writes a `ListingVerification` badge recording who approved it and when, and marks the listing verified. The queue shows whether the claimant's email domain matches the listed website — that's a **hint, not proof**: it's spoofable, and a mismatch is perfectly normal for an agency or someone using a personal address. Confirm people independently.
+
+**Two behaviours worth knowing:**
+
+- **Ratings are recomputed from published reviews.** Publishing or unpublishing a review recalculates `ratingScore` / `ratingCount` / `ratingDist`. The 11 seeded companies carry hand-entered demo aggregates with no `Review` rows behind them, so the first moderation action on one of those replaces the demo figure with the real one — OPay went from 4.6 / 128 reviews to 4.67 / 3 in testing. That's intended (the number should describe data we actually hold) but it is a visible drop. The logic is isolated in `recomputeRating()` in `src/lib/companyWrite.ts` if you'd rather it worked differently.
+- **Renaming a company does not change its slug.** The URL stays stable so existing links don't break. Edit the slug field directly if you actually want it to move.
 
 ---
 
@@ -97,7 +132,11 @@ This splits into two genuinely different things:
 
 ## 7. Known gaps — be honest about these with anyone asking
 
-- **No moderation/admin screen.** Pending company submissions and reviews have no review queue — they either sit invisible or go live unmoderated.
+- ~~No moderation/admin screen.~~ **Done** — see section 5b.
+- **Fixed along the way: non-active listings were public.** The public queries in `queries.ts` filtered on `verification` but never on `status`, so every pending public submission was live on the directory the moment it was submitted — the opposite of what this document used to claim. Public reads are now restricted to `status = "active"`. If you have a listing that has quietly gone missing from the directory, check its status in the admin dashboard.
+- **No audit log.** Who approved what is captured on the rows themselves (`decidedById`, `verifiedById`, `reviewedById`) but there's no single chronological log of admin actions.
+- **No email notifications.** Approving or rejecting a submission or claim doesn't tell the submitter anything — you have to contact them yourself.
+- **`ListingCorrection` still has no UI.** The table exists and the schema supports "report this listing as closed / wrong / duplicate", but nothing reads or writes it yet.
 - **No sourcing pipeline.** The 11 companies currently in the database were hand-researched and typed into a seed script once. There's no ongoing process to find, verify, or refresh company data at scale.
 - **Rate limiting is in-memory**, meaning it only works correctly on a single running instance — fine for now, would need a real store (like Redis) if traffic grows.
 - **No password reset or email verification** — signup/login work, but that's the minimal version.
@@ -120,6 +159,8 @@ npm run dev
 **Add a new category without code** (basic fields only): run `npx prisma studio`, open the `Industry` table, add a row (set `parentId` empty for a top-level vertical, or point it at an existing one to nest it as a sub-category).
 
 **Manually run the website activity check:** `npm run check-activity`
+
+**Grant yourself admin access:** `npm run make-admin -- you@example.com` (the account must already exist — sign up first)
 
 ---
 
