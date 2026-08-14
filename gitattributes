@@ -1,0 +1,38 @@
+# Normalise line endings.
+#
+# Files in this repo have made a round trip through Windows at least once,
+# which rewrote them with CRLF endings. That doesn't break anything at
+# runtime — Node, Prisma and Next don't care — but without this file it
+# shows up in review as an entire file being rewritten when only a line or
+# two actually changed.
+#
+# `text=auto eol=lf` tells Git to store everything with LF in the repository
+# and convert on checkout, so the working copy is whatever each machine
+# expects while history stays clean.
+* text=auto eol=lf
+
+# Binary files: never touch these, line-ending conversion would corrupt them.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.pdf binary
+*.zip binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+
+# Collapse these in pull requests — they're generated or vendored, so the
+# diff is noise. `linguist-generated` hides them by default on GitHub;
+# they're still versioned and still reviewable if you expand them.
+package-lock.json linguist-generated=true -diff
+src/generated/** linguist-generated=true -diff
+
+# Keep the seed and schema fully diffable. They're large, but they're
+# hand-maintained data and a change in them is exactly the kind of thing
+# that needs a human read.
+prisma/schema.prisma -linguist-generated
+prisma/seed.ts -linguist-generated
