@@ -127,7 +127,30 @@ Non-admins are redirected away from `/admin` and get a 403 from every `/api/admi
 
 ---
 
-## 6. The Activity Intelligence system (newest addition)
+## 5c. Sectors, geography and links (August 2026 pass)
+
+**Six verticals, not two.** Fintech and Healthcare were joined by Engineering & Construction, Science & Research, Legal, and Education — 34 industries in total, all with listings. Adding another vertical means adding rows to `INDUSTRIES` in the seed; the directory tabs, the public submission form and the admin company form all read the taxonomy from the database and pick it up automatically. `VERTICAL_META` in `DirectoryApp.tsx` is optional display polish, not a registry you must keep in sync.
+
+**Geography is a real country > state > city tree.** Six countries (Nigeria, Ghana, Kenya, South Africa, Egypt, Rwanda), 49 states/provinces, 37 cities. Two things were fixed to make it usable:
+
+- `buildWhere` matched region slugs exactly, so filtering by a country returned nothing at all. `expandRegionScope()` now resolves a slug to itself plus all descendants — `region=ng` matches every Nigerian state and city.
+- Listings only attached to states, so city filters returned zero. The seed now also links a listing to its city region when its free-text `city` matches one. Cities named on a listing but missing from `REGIONS` are reported at the end of the seed run rather than silently dropped.
+
+**The directory is deep-linkable.** Previously only `?q=` was read from the URL and every other filter reset to "all" on load — which is why the footer's "Industries" and "Regions" links had nowhere meaningful to point. All filters now initialise from the URL and mirror back to it, so `/directory?vertical=legal&region=lagos` is a real, shareable view.
+
+**Dead links are gone.** Fixed: three `href="#"` social stubs and a `#` Contact in the footer; five "Discover" links that all pointed at bare `/directory` regardless of their label; and placeholder `"#"` social handles on seeded companies, which rendered as icons that looked live and went nowhere. `socialIcons()` now only renders a handle that is an actual http(s) URL. A crawl of every page finds 33 internal link targets, all 200, no placeholders.
+
+**Sort options are per-vertical.** "Most funded" and "Most beds" only appear where those columns exist — offering them on law firms or universities was a control that silently did nothing.
+
+---
+
+## 6. The Activity Intelligence system
+
+**Now runnable from the UI.** The checker was always real code — genuine outbound HTTP GETs, parked-domain sniffing, content hashing, scores derived only from recorded history. What was missing was any way to run it or see it. `/admin/activity` now lists every listing with its last result, check count and last-checked time, with a "Check now" per listing and a "Run all" button, backed by `POST /api/admin/activity`. The nightly Vercel cron at 06:00 UTC still calls the same function and needs `CRON_SECRET` set.
+
+**Run it after seeding.** Seeded and imported listings arrive `unverified` with no activity score on purpose. `npm run check-activity` (or the admin button) is what confirms their websites resolve. A listing that has never been checked shows no score at all rather than a fabricated one.
+
+**Two honest caveats.** Some sites return 403 to non-browser user agents, so a real company can be recorded "unreachable" — verify before acting on a low score. And the score measures whether a website responds; it is not a measure of business health.
 
 The idea: every company should show a clear, honest signal of how active/alive it is, instead of a directory listing quietly going stale forever.
 
@@ -148,6 +171,8 @@ This splits into two genuinely different things:
 
 - ~~No moderation/admin screen.~~ **Done** — see section 5b.
 - **Fixed along the way: non-active listings were public.** The public queries in `queries.ts` filtered on `verification` but never on `status`, so every pending public submission was live on the directory the moment it was submitted — the opposite of what this document used to claim. Public reads are now restricted to `status = "active"`. If you have a listing that has quietly gone missing from the directory, check its status in the admin dashboard.
+- **Seeded sector data is researched, not verified.** The engineering, science, legal, education and non-Nigerian listings are real organisations at their real public domains, but the descriptions were written from general knowledge rather than scraped from a primary source. Every one is seeded `unverified`, with no rating, and with funding/valuation/headcount left blank rather than guessed. Run the activity checker and spot-check before treating any of it as authoritative — there's a provenance block in `seed.ts` saying the same thing.
+- **`hello@indexone.example` on the /about page is a placeholder.** It's the only fake destination left in the app; swap it for a real inbox before launch.
 - **No audit log.** Who approved what is captured on the rows themselves (`decidedById`, `verifiedById`, `reviewedById`) but there's no single chronological log of admin actions.
 - **No email notifications.** Approving or rejecting a submission or claim doesn't tell the submitter anything — you have to contact them yourself.
 - **`ListingCorrection` still has no UI.** The table exists and the schema supports "report this listing as closed / wrong / duplicate", but nothing reads or writes it yet.
