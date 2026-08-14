@@ -1,6 +1,9 @@
 {
   "name": "roster-db",
   "version": "0.1.0",
+  "engines": {
+    "node": ">=20.19 <21 || >=22.12"
+  },
   "private": true,
   "scripts": {
     "dev": "next dev",
