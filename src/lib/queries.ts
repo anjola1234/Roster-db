@@ -31,7 +31,9 @@ export type CompanyFull = Prisma.CompanyGetPayload<{ include: typeof companyIncl
 export type CompanyFilters = {
   vertical?: string; // top-level industry slug, e.g. "fintech"
   industry?: string; // leaf industry slug, e.g. "fintech-payments"
-  region?: string; // region slug
+  region?: string; // region slug — country, state or city
+  /** Internal: `region` plus every descendant slug, filled in by expandRegionScope. */
+  regionScope?: string[];
   status?: string; // "verified" | "unverified" | "flagged"
   tags?: string[]; // feature slugs, AND semantics
   q?: string;
@@ -47,7 +49,13 @@ function buildWhere(filters: CompanyFilters): Prisma.CompanyWhereInput {
   }
 
   if (filters.region) {
-    AND.push({ regions: { some: { region: { slug: filters.region } } } });
+    // Region filtering is hierarchical. Listings attach to states, so an
+    // exact-slug match meant "Nigeria" and "Ikeja" both returned nothing.
+    // regionScope is resolved by the caller (it needs a query) and holds the
+    // region plus all of its descendants; falling back to the bare slug keeps
+    // this correct if a caller hasn't resolved it.
+    const slugs = filters.regionScope?.length ? filters.regionScope : [filters.region];
+    AND.push({ regions: { some: { region: { slug: { in: slugs } } } } });
   }
 
   if (filters.status) {
@@ -75,8 +83,31 @@ function buildWhere(filters: CompanyFilters): Prisma.CompanyWhereInput {
   return { AND };
 }
 
+/**
+ * Expands a region slug into itself plus all descendants, so filtering by
+ * "ng" catches every state and city under Nigeria and filtering by a state
+ * catches its cities. Two levels is enough for the country > state > city
+ * hierarchy the seed uses.
+ */
+export async function expandRegionScope(slug: string): Promise<string[]> {
+  const root = await prisma.region.findUnique({
+    where: { slug },
+    select: { slug: true, children: { select: { slug: true, children: { select: { slug: true } } } } },
+  });
+  if (!root) return [slug];
+  const slugs = [root.slug];
+  for (const child of root.children) {
+    slugs.push(child.slug);
+    for (const grandchild of child.children) slugs.push(grandchild.slug);
+  }
+  return slugs;
+}
+
 export async function getCompanies(filters: CompanyFilters = {}) {
-  const where = buildWhere(filters);
+  const resolved: CompanyFilters = filters.region
+    ? { ...filters, regionScope: await expandRegionScope(filters.region) }
+    : filters;
+  const where = buildWhere(resolved);
   return prisma.company.findMany({ where, include: companyInclude });
 }
 
@@ -134,6 +165,49 @@ export async function getIndustries() {
 // levels, used for future breadcrumb-style URLs, not this filter UI).
 export async function getRegions(level: string = "state") {
   return prisma.region.findMany({ where: { level }, orderBy: { name: "asc" } });
+}
+
+/**
+ * Every region that actually has listings under it, ordered country > state >
+ * city, for the directory's region picker. Regions with nothing in them are
+ * left out — offering a filter that can only ever return zero results is
+ * worse than not offering it.
+ */
+export async function getRegionTree() {
+  const rows = await prisma.region.findMany({
+    select: {
+      slug: true,
+      name: true,
+      level: true,
+      parent: { select: { slug: true, name: true } },
+    },
+    orderBy: { name: "asc" },
+  });
+
+  const counts = await prisma.companyRegion.groupBy({
+    by: ["regionId"],
+    _count: { companyId: true },
+  });
+  const withListings = new Set(counts.map((c) => c.regionId));
+  const idBySlug = await prisma.region.findMany({ select: { id: true, slug: true } });
+  const slugById = new Map(idBySlug.map((r) => [r.id, r.slug]));
+  const populated = new Set(Array.from(withListings).map((id) => slugById.get(id)!));
+
+  // A country or state counts as populated if anything beneath it is.
+  const bySlug = new Map(rows.map((r) => [r.slug, r]));
+  for (const row of rows) {
+    if (!populated.has(row.slug)) continue;
+    let parent = row.parent?.slug;
+    while (parent) {
+      populated.add(parent);
+      parent = bySlug.get(parent)?.parent?.slug;
+    }
+  }
+
+  const order = { country: 0, state: 1, city: 2 } as Record<string, number>;
+  return rows
+    .filter((r) => populated.has(r.slug))
+    .sort((a, b) => (order[a.level] ?? 9) - (order[b.level] ?? 9) || a.name.localeCompare(b.name));
 }
 
 export async function getFeatures(verticalSlug?: string) {

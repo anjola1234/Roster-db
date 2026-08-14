@@ -1,12 +1,18 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import DirectoryApp from "@/components/DirectoryApp";
-import { getFeatures, getIndustries, getRegions } from "@/lib/queries";
+import { getFeatures, getIndustries, getRegionTree } from "@/lib/queries";
 
 export const metadata: Metadata = { title: "Directory — IndexOne" };
 
 export default async function DirectoryPage() {
-  const [industries, regions, features] = await Promise.all([getIndustries(), getRegions(), getFeatures()]);
+  // All three levels, so the region filter can offer countries, states and
+  // cities rather than states alone.
+  const [industries, regions, features] = await Promise.all([
+    getIndustries(),
+    getRegionTree(),
+    getFeatures(),
+  ]);
 
   return (
     <main>

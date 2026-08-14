@@ -2,12 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { money } from "@/lib/format";
 import ActivityBadge from "@/components/ActivityBadge";
 
 type Industry = { id: string; slug: string; name: string; icon: string | null; accent: string | null; children: { id: string; slug: string; name: string }[] };
-type Region = { id: string; slug: string; name: string };
+type Region = { slug: string; name: string; level: string; parent: { slug: string; name: string } | null };
 type Feature = { id: string; slug: string; name: string; group: string; industry: { slug: string } };
 
 type CompanyRow = {
@@ -35,9 +35,17 @@ type CompanyRow = {
   investors: { investor: { name: string } }[];
 };
 
+// Display overrides for the category tabs. Anything not listed here falls
+// back to the industry's own icon and name from the database, so adding a
+// vertical to the seed is enough — this map is optional polish, not a
+// registry that has to be kept in sync.
 const VERTICAL_META: Record<string, { icon: string; label: string }> = {
   fintech: { icon: "▲", label: "Fintech" },
-  healthcare: { icon: "✚", label: "Hospitals" },
+  healthcare: { icon: "✚", label: "Healthcare" },
+  engineering: { icon: "⚒", label: "Engineering" },
+  science: { icon: "⚗", label: "Science" },
+  legal: { icon: "§", label: "Legal" },
+  education: { icon: "◆", label: "Education" },
 };
 
 function verifyPill(v: string) {
@@ -71,13 +79,20 @@ export default function DirectoryApp({
   features: Feature[];
 }) {
   const searchParams = useSearchParams();
+  const router = useRouter();
 
-  const [category, setCategory] = useState<string>("all");
-  const [region, setRegion] = useState("all");
-  const [subcat, setSubcat] = useState("all");
-  const [status, setStatus] = useState("all");
-  const [sort, setSort] = useState("az");
-  const [tags, setTags] = useState<string[]>([]);
+  // Every filter initialises from the URL, so /directory?vertical=legal or
+  // ?region=lagos is a real, shareable, linkable view. Before this, only `q`
+  // was read and every other filter reset to "all" on load — which is why
+  // the footer's "Industries" and "Regions" links had nowhere useful to point.
+  const [category, setCategory] = useState<string>(searchParams.get("vertical") ?? "all");
+  const [region, setRegion] = useState(searchParams.get("region") ?? "all");
+  const [subcat, setSubcat] = useState(searchParams.get("industry") ?? "all");
+  const [status, setStatus] = useState(searchParams.get("status") ?? "all");
+  const [sort, setSort] = useState(searchParams.get("sort") ?? "az");
+  const [tags, setTags] = useState<string[]>(
+    searchParams.get("tags")?.split(",").filter(Boolean) ?? [],
+  );
   const [q, setQ] = useState(searchParams.get("q") ?? "");
 
   const [rows, setRows] = useState<CompanyRow[]>([]);
@@ -128,27 +143,38 @@ export default function DirectoryApp({
       .then((data: { companies: CompanyRow[] }) => setRows(data.companies))
       .catch(() => setRows([]))
       .finally(() => setLoading(false));
-  }, [category, subcat, region, status, tags, q, sort]);
+
+    // Mirror the filters into the address bar so the current view can be
+    // copied, bookmarked or shared. replace() rather than push() keeps the
+    // back button meaning "the page before the directory", not a rewind
+    // through every filter click.
+    const qs = params.toString();
+    router.replace(qs ? `/directory?${qs}` : "/directory", { scroll: false });
+  }, [category, subcat, region, status, tags, q, sort, router]);
 
   const activeIndustry = useMemo(() => industries.find((i) => i.slug === category), [industries, category]);
   const activeFeatures = useMemo(() => features.filter((f) => f.industry.slug === category), [features, category]);
 
-  const sorts = activeIndustry
-    ? category === "healthcare"
-      ? [
-          ["az", "A - Z"],
-          ["beds", "Most beds"],
-          ["newest", "Newest"],
-        ]
-      : [
-          ["az", "A - Z"],
-          ["funding", "Most funded"],
-          ["newest", "Newest"],
-        ]
-    : [
-        ["az", "A - Z"],
-        ["newest", "Newest"],
-      ];
+  // Sort options are per-vertical because the underlying columns are. Offering
+  // "Most funded" on law firms or "Most beds" on universities would be a
+  // control that silently does nothing — those columns are null there.
+  const SORTS_BY_VERTICAL: Record<string, [string, string][]> = {
+    healthcare: [
+      ["az", "A - Z"],
+      ["beds", "Most beds"],
+      ["newest", "Newest"],
+    ],
+    fintech: [
+      ["az", "A - Z"],
+      ["funding", "Most funded"],
+      ["newest", "Newest"],
+    ],
+  };
+  const DEFAULT_SORTS: [string, string][] = [
+    ["az", "A - Z"],
+    ["newest", "Newest"],
+  ];
+  const sorts = activeIndustry ? (SORTS_BY_VERTICAL[category] ?? DEFAULT_SORTS) : DEFAULT_SORTS;
 
   function clearFilters() {
     setRegion("all");
@@ -189,11 +215,38 @@ export default function DirectoryApp({
             <span className="filter-label">Region</span>
             <select className="control" value={region} onChange={(e) => setRegion(e.target.value)}>
               <option value="all">All regions</option>
-              {regions.map((r) => (
-                <option key={r.slug} value={r.slug}>
-                  {r.name}
-                </option>
-              ))}
+              {/* Grouped by level so a country, a state and a city are
+                  visibly different choices. Picking a country matches
+                  everything beneath it. */}
+              <optgroup label="Countries">
+                {regions
+                  .filter((r) => r.level === "country")
+                  .map((r) => (
+                    <option key={r.slug} value={r.slug}>
+                      {r.name}
+                    </option>
+                  ))}
+              </optgroup>
+              <optgroup label="States / provinces">
+                {regions
+                  .filter((r) => r.level === "state")
+                  .map((r) => (
+                    <option key={r.slug} value={r.slug}>
+                      {r.name}
+                      {r.parent ? ` — ${r.parent.name}` : ""}
+                    </option>
+                  ))}
+              </optgroup>
+              <optgroup label="Cities">
+                {regions
+                  .filter((r) => r.level === "city")
+                  .map((r) => (
+                    <option key={r.slug} value={r.slug}>
+                      {r.name}
+                      {r.parent ? ` — ${r.parent.name}` : ""}
+                    </option>
+                  ))}
+              </optgroup>
             </select>
           </div>
           <div className="filter-group">

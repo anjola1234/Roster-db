@@ -17,17 +17,10 @@ export default function Footer() {
             </Link>
             <p>The directory for discovering the companies, products, and institutions shaping the next wave.</p>
             <NewsletterForm />
-            <div className="footer-social">
-              <a href="#" aria-label="X / Twitter">
-                𝕏
-              </a>
-              <a href="#" aria-label="LinkedIn">
-                in
-              </a>
-              <a href="#" aria-label="Instagram">
-                IG
-              </a>
-            </div>
+            {/* Social icons were three href="#" stubs. IndexOne has no
+                published accounts yet, so rather than render dead links,
+                nothing is shown until there's somewhere real to point.
+                Add them back here when the accounts exist. */}
           </div>
 
           <div className="footer-col">
@@ -37,16 +30,25 @@ export default function Footer() {
                 <Link href="/directory">Explore Directory</Link>
               </li>
               <li>
-                <Link href="/directory">Companies</Link>
+                <Link href="/directory?status=verified">Verified companies</Link>
               </li>
               <li>
-                <Link href="/directory">Industries</Link>
+                <Link href="/directory?vertical=fintech">Fintech</Link>
               </li>
               <li>
-                <Link href="/directory">Regions</Link>
+                <Link href="/directory?vertical=healthcare">Healthcare</Link>
               </li>
               <li>
-                <Link href="/directory">Reviews</Link>
+                <Link href="/directory?vertical=engineering">Engineering</Link>
+              </li>
+              <li>
+                <Link href="/directory?vertical=legal">Legal</Link>
+              </li>
+              <li>
+                <Link href="/directory?vertical=education">Education</Link>
+              </li>
+              <li>
+                <Link href="/directory?vertical=science">Science &amp; Research</Link>
               </li>
             </ul>
           </div>
@@ -55,19 +57,19 @@ export default function Footer() {
             <h4>Resources</h4>
             <ul>
               <li>
-                <Link href="/#platform">About</Link>
+                <Link href="/about">About</Link>
               </li>
               <li>
-                <Link href="/#platform">Resources</Link>
+                <Link href="/about#methodology">How we verify</Link>
               </li>
               <li>
                 <Link href="/list-your-product">List Your Product</Link>
               </li>
               <li>
-                <Link href="/directory">Compare</Link>
+                <Link href="/directory?region=ng">Browse Nigeria</Link>
               </li>
               <li>
-                <a href="#">Contact</a>
+                <Link href="/about#contact">Contact</Link>
               </li>
             </ul>
           </div>

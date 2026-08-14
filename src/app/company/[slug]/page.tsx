@@ -26,7 +26,13 @@ function verifyPill(v: string) {
 function socialIcons(s: unknown) {
   const map: Record<string, string> = { x: "𝕏", linkedin: "in", instagram: "IG", facebook: "f" };
   const obj = (s as Record<string, string> | null) ?? {};
-  const keys = Object.keys(obj);
+  // Only render a handle we can actually navigate to. Several seeded listings
+  // carry placeholder values ("#", ""), which previously rendered as icons
+  // that looked live and went nowhere — worse than showing nothing.
+  const keys = Object.keys(obj).filter((k) => {
+    const url = obj[k];
+    return typeof url === "string" && /^https?:\/\//i.test(url.trim());
+  });
   if (!keys.length) return <span className="mono" style={{ color: "var(--faint)" }}>—</span>;
   return (
     <span className="socials">

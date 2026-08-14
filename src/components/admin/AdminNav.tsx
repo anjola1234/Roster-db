@@ -11,6 +11,7 @@ const LINKS = [
   { href: "/admin/submissions", label: "Submissions", key: "submissions" },
   { href: "/admin/claims", label: "Claims", key: "claims" },
   { href: "/admin/reviews", label: "Reviews", key: "reviews" },
+  { href: "/admin/activity", label: "Activity", key: null },
 ] as const;
 
 export default function AdminNav({ counts }: { counts: Counts }) {
