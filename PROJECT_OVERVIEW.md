@@ -205,6 +205,31 @@ Freshness bands from §19 (`fresh` / `aging` / `stale` / `very stale`) are imple
 
 ---
 
+## 5f. Company comparison
+
+Spec section 7, at `/compare`. Pick up to four listings; selection lives entirely in the URL (`/compare?c=opay,flutterwave`) so a comparison is a link you can send.
+
+**The rows adapt to the category**, which the spec asks for explicitly. Rather than a third hand-maintained list of what each vertical cares about, comparison reuses the same extension schemas that drive the admin form and the public profile. The rule: shared rows always render; a vertical's extra rows render only when *every* selected listing uses that schema.
+
+Verified in testing:
+
+| Comparison | Sector rows shown |
+|---|---|
+| Two fintechs | Funding, valuation, licences, investors, funding rounds |
+| Two hospitals | Bed capacity, emergency department, accreditations, ownership |
+| Fintech vs law firm | None — with an on-screen explanation of why |
+| Two law firms | None — both use base fields only, also explained |
+
+That last behaviour is deliberate. Rendering "Bed capacity: 120 vs —" across a hospital and a law firm invites a comparison that isn't meaningful, so the block is hidden and the page says so rather than leaving a reader wondering whether it's a bug.
+
+**Other decisions:**
+
+- **"Show differences only"** filters to rows where the listings actually diverge, with a count of what's hidden.
+- **Never-measured is not zero.** A listing with no activity check shows "Not checked", not "0/100" — those mean very different things and the comparison is exactly where that confusion would matter.
+- The evidence row surfaces "*n* of *m* fields verified", so a reader can see which listing's data is better attested, not just what it claims.
+
+---
+
 ## 6. The Activity Intelligence system
 
 **Now runnable from the UI.** The checker was always real code — genuine outbound HTTP GETs, parked-domain sniffing, content hashing, scores derived only from recorded history. What was missing was any way to run it or see it. `/admin/activity` now lists every listing with its last result, check count and last-checked time, with a "Check now" per listing and a "Run all" button, backed by `POST /api/admin/activity`. The nightly Vercel cron at 06:00 UTC still calls the same function and needs `CRON_SECRET` set.
@@ -236,7 +261,7 @@ This splits into two genuinely different things:
 - **`hello@indexone.example` on the /about page is a placeholder.** It's the only fake destination left in the app; swap it for a real inbox before launch.
 - ~~No audit log.~~ **Done** — see section 5d.
 - **The audit log starts empty and cannot be backfilled.** Actions taken before it was added were never recorded.
-- **Still unbuilt from the product spec:** company comparison (§7), activity signals beyond website reachability with admin-configurable weights (§4 — `ScoreWeight` likewise exists unused), entity-aware and natural-language search (§2), and the whole API ingestion / connector / change-detection subsystem (§15–18).
+- **Still unbuilt from the product spec:** activity signals beyond website reachability with admin-configurable weights (§4 — `ScoreWeight` likewise exists unused), entity-aware and natural-language search (§2), and the whole API ingestion / connector / change-detection subsystem (§15–18).
 - **11 schema models still have no application code reading them:** `Product`, `JobPosting`, `NewsItem`, `SocialMetric`, `TrafficEstimate`, `CrawlRun`, `ScoreWeight`, `ListingCorrection`, `ListingCurrentSignal`, `CompanyCategory`, `Award`. (`FieldProvenance`, `DataSource` and `FieldDefinition` are now wired up — see sections 5e and 4.) Some carry seeded sample rows, which makes features look half-built in the database while being entirely absent from the product. They're being wired up as the features that need them get built.
 - **No email notifications.** Approving or rejecting a submission or claim doesn't tell the submitter anything — you have to contact them yourself.
 - **`ListingCorrection` still has no UI.** The table exists and the schema supports "report this listing as closed / wrong / duplicate", but nothing reads or writes it yet.
