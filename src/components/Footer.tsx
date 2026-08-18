@@ -66,6 +66,9 @@ export default function Footer() {
                 <Link href="/list-your-product">List Your Product</Link>
               </li>
               <li>
+                <Link href="/compare">Compare companies</Link>
+              </li>
+              <li>
                 <Link href="/directory?region=ng">Browse Nigeria</Link>
               </li>
               <li>

@@ -166,6 +166,9 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
               <a className="btn btn-primary" href={company.website} target="_blank" rel="noopener noreferrer">
                 Visit website ↗
               </a>
+              <Link className="btn btn-ghost" href={`/compare?c=${company.slug}`}>
+                Compare
+              </Link>
               <ClaimListingButton
                 companySlug={company.slug}
                 signedIn={Boolean(viewer)}
