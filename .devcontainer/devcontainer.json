@@ -1,0 +1,49 @@
+{
+  "name": "Roster-db (IndexOne)",
+
+  // Node 22 — not the Codespaces default.
+  //
+  // Without this file the codespace picked Node 16.20.2, which is
+  // end-of-life and below the floor for two of our dependencies:
+  //   next 16.2.12   requires node >=20.9.0
+  //   prisma 7.9.0   requires node ^20.19 || ^22.12 || >=24.0
+  // so `npm run build` failed before it could compile anything.
+  //
+  // 22 is chosen over 20 because it's the current LTS line and satisfies
+  // both ranges. If you bump this, check it against Prisma's range above —
+  // Prisma is the tighter constraint, not Next.
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm",
+
+  "features": {
+    // GitHub CLI, handy in a codespace and harmless if unused.
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+
+  // Install dependencies on create. Deliberately NOT running `prisma
+  // generate`, `migrate deploy` or the build here: those need DATABASE_URL,
+  // which isn't set until you add it as a Codespaces secret. Running them
+  // eagerly just produces a confusing red error on first boot.
+  "postCreateCommand": "npm install",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "Prisma.prisma",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ],
+      "settings": {
+        "editor.formatOnSave": false,
+        "files.eol": "\n"
+      }
+    }
+  },
+
+  // 3000 = next dev.
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": { "label": "IndexOne dev server", "onAutoForward": "notify" }
+  },
+
+  "remoteUser": "node"
+}
