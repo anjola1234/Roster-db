@@ -184,6 +184,27 @@ Browse at `/admin/audit`, filter by area, action, or free text across target/adm
 
 ---
 
+## 5e. Evidence & verification
+
+Spec sections 13, 14 and 29. The `FieldProvenance` and `DataSource` tables already existed with 18 seeded rows carrying real source URLs — nothing read or wrote them, so the evidence was invisible in the product.
+
+**The distinction being enforced** (§29): holding a value is *data*, citing a source is *evidence*, and a person confirming it is *verification*. These are three separate states and the UI never blurs them. `FieldProvenance` gained `verifiedById`, `verifiedAt` and `note` so the third can be expressed at all — before, a row could cite a source but never say whether anyone had checked it.
+
+**Admin** — `/admin/companies/[id]/evidence`: attach evidence to any field, pick a `DataSource`, record URL/confidence/note, mark one row authoritative per field, and verify or withdraw verification separately from recording the source. Evidence for the same field is grouped so conflicting sources sit side by side.
+
+**Public** — the profile's existing "Source & verification" section now carries a per-field table: the value on record, where it came from, and whether it's verified or merely cited, with a note telling readers to treat unverified rows as leads rather than facts.
+
+**Decisions worth knowing:**
+
+- **Only authoritative rows publish.** The losing side of a source conflict is kept but stays internal — publishing both would present a contradiction as though it were balanced truth. Verified in testing: two conflicting registration numbers, only the CAC-sourced one renders.
+- **Verification is opt-in, never implied.** Attaching evidence leaves a row unverified unless the admin ticks "I have personally confirmed this". All 18 seeded rows therefore show as cited-but-unverified, which is accurate — they came from research, not confirmation.
+- **Legacy keys were remapped.** Seeded provenance used snake_case names (`total_funding_raised`) matching no real column, so evidence could never join back to the value it supported. `LEGACY_KEY_ALIASES` in `src/lib/evidence.ts` normalises them; `funding_round:*` keys are deliberately left alone since they describe a round, not a column.
+- Every evidence action is audited, and deletions are logged before the delete.
+
+Freshness bands from §19 (`fresh` / `aging` / `stale` / `very stale`) are implemented in `src/lib/evidence.ts` and shown on verified rows in the admin view.
+
+---
+
 ## 6. The Activity Intelligence system
 
 **Now runnable from the UI.** The checker was always real code — genuine outbound HTTP GETs, parked-domain sniffing, content hashing, scores derived only from recorded history. What was missing was any way to run it or see it. `/admin/activity` now lists every listing with its last result, check count and last-checked time, with a "Check now" per listing and a "Run all" button, backed by `POST /api/admin/activity`. The nightly Vercel cron at 06:00 UTC still calls the same function and needs `CRON_SECRET` set.
@@ -215,8 +236,8 @@ This splits into two genuinely different things:
 - **`hello@indexone.example` on the /about page is a placeholder.** It's the only fake destination left in the app; swap it for a real inbox before launch.
 - ~~No audit log.~~ **Done** — see section 5d.
 - **The audit log starts empty and cannot be backfilled.** Actions taken before it was added were never recorded.
-- **Still unbuilt from the product spec:** evidence/provenance UI (§13, §14 — `FieldProvenance` exists in the schema but nothing reads or writes it), company comparison (§7), activity signals beyond website reachability with admin-configurable weights (§4 — `ScoreWeight` likewise exists unused), entity-aware and natural-language search (§2), and the whole API ingestion / connector / change-detection subsystem (§15–18).
-- **14 schema models have no application code reading them:** `Product`, `JobPosting`, `NewsItem`, `SocialMetric`, `TrafficEstimate`, `CrawlRun`, `ScoreWeight`, `ListingCorrection`, `ListingCurrentSignal`, `CompanyCategory`, `Award`, `FieldDefinition`, `FieldProvenance`, `DataSource`. Some carry seeded sample rows, which makes features look half-built in the database while being entirely absent from the product. They're being wired up as the features that need them get built.
+- **Still unbuilt from the product spec:** company comparison (§7), activity signals beyond website reachability with admin-configurable weights (§4 — `ScoreWeight` likewise exists unused), entity-aware and natural-language search (§2), and the whole API ingestion / connector / change-detection subsystem (§15–18).
+- **11 schema models still have no application code reading them:** `Product`, `JobPosting`, `NewsItem`, `SocialMetric`, `TrafficEstimate`, `CrawlRun`, `ScoreWeight`, `ListingCorrection`, `ListingCurrentSignal`, `CompanyCategory`, `Award`. (`FieldProvenance`, `DataSource` and `FieldDefinition` are now wired up — see sections 5e and 4.) Some carry seeded sample rows, which makes features look half-built in the database while being entirely absent from the product. They're being wired up as the features that need them get built.
 - **No email notifications.** Approving or rejecting a submission or claim doesn't tell the submitter anything — you have to contact them yourself.
 - **`ListingCorrection` still has no UI.** The table exists and the schema supports "report this listing as closed / wrong / duplicate", but nothing reads or writes it yet.
 - **No sourcing pipeline.** The 11 companies currently in the database were hand-researched and typed into a seed script once. There's no ongoing process to find, verify, or refresh company data at scale.
