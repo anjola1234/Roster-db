@@ -17,6 +17,7 @@ export type ActivityRow = {
   websiteStatus: string | null;
   websiteLastCheckedAt: Date | null;
   _count: { websiteChecks: number };
+  scores: { coverage: number; componentsJson: unknown; computedAt: Date }[];
 };
 
 const STATUS_META: Record<string, { cls: string; label: string }> = {
@@ -70,14 +71,20 @@ export default function AdminActivity({ companies }: { companies: ActivityRow[] 
           <div>
             <h2>Website activity</h2>
             <p className="admin-lede">
-              Each check is a real HTTP request to the company&apos;s website. Scores come from that
-              history only — a listing that has never been checked shows no score rather than a
-              made-up one.
+              Each check is a real HTTP request to the company&apos;s website. The activity score
+              combines that with reviews, funding recency and verification freshness — and a
+              signal we can&apos;t observe contributes nothing rather than scoring zero. Coverage
+              shows how much of the intended picture each score is actually built from.
             </p>
           </div>
-          <button className="btn btn-primary" disabled={busy !== null} onClick={() => run()}>
-            {busy === "all" ? "Checking… this can take a while" : "Run checks on all listings"}
-          </button>
+          <div className="admin-actions-row">
+            <Link className="btn btn-secondary" href="/admin/activity/weights">
+              Configure weights
+            </Link>
+            <button className="btn btn-primary" disabled={busy !== null} onClick={() => run()}>
+              {busy === "all" ? "Checking… this can take a while" : "Run checks on all listings"}
+            </button>
+          </div>
         </div>
 
         {neverChecked > 0 && (
@@ -103,6 +110,7 @@ export default function AdminActivity({ companies }: { companies: ActivityRow[] 
               <th>Company</th>
               <th>Activity</th>
               <th>Last result</th>
+              <th>Coverage</th>
               <th>Checks</th>
               <th>Last checked</th>
               <th>Action</th>
@@ -125,6 +133,24 @@ export default function AdminActivity({ companies }: { companies: ActivityRow[] 
                       <span className={meta.cls}>{meta.label}</span>
                     ) : (
                       <span className="admin-muted">never checked</span>
+                    )}
+                  </td>
+                  <td className="mono">
+                    {c.scores[0] ? (
+                      <span
+                        className={
+                          c.scores[0].coverage >= 0.6
+                            ? "pill emerald"
+                            : c.scores[0].coverage >= 0.3
+                              ? "pill"
+                              : "pill amber"
+                        }
+                        title="Share of the intended signal weight we could actually measure"
+                      >
+                        {Math.round(c.scores[0].coverage * 100)}%
+                      </span>
+                    ) : (
+                      <span className="admin-muted">—</span>
                     )}
                   </td>
                   <td className="mono">{c._count.websiteChecks}</td>

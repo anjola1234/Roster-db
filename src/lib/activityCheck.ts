@@ -12,6 +12,7 @@
  */
 import { createHash } from "crypto";
 import { prisma } from "@/lib/prisma";
+import { persistActivityScore } from "@/lib/activitySignals";
 import type { Company } from "@/generated/prisma/client";
 
 const MAX_BODY_BYTES = 200_000; // cap how much of the response body we read
@@ -102,47 +103,33 @@ export async function checkCompanyWebsite(
       errorNote,
       result,
       checkedAt: now,
+      contentHash,
     },
   });
 
   // Recompute the score from history (including the check we just inserted)
   // and persist it as a new Score row (scoreType="activity") + the
   // denormalized Company columns kept for fast reads.
-  const isFirstEverCheck = (await prisma.websiteCheck.count({ where: { companyId: company.id } })) === 1;
-  const fresh = await prisma.company.findUniqueOrThrow({ where: { id: company.id } });
-  const score = await computeActivityScore(company.id);
-  const label = score === null ? null : labelForScore(score, fresh.activityScore);
-
-  if (score !== null) {
-    await prisma.score.create({
-      data: {
-        companyId: company.id,
-        scoreType: "activity",
-        value: score,
-        band: label,
-        componentsJson: { website: score },
-        coverage: 1, // website is the only input feeding this score today
-        weightsVersion: "v1",
-        computedAt: now,
-      },
-    });
-  }
-
   await prisma.company.update({
     where: { id: company.id },
     data: {
-      activityScorePrev: fresh.activityScore,
-      activityScore: score,
-      activityLabel: label,
       websiteStatus: result,
       websiteLastCheckedAt: now,
-      // A company that resolves to a live site is presumably actually
-      // operating — but never override a lifecycle status a human already
-      // set to something else (closed/acquired/merged/operating).
-      lifecycleStatus:
-        fresh.lifecycleStatus === "unverified" && isFirstEverCheck ? "operating" : fresh.lifecycleStatus,
+      websiteContentHash: contentHash ?? company.websiteContentHash,
+      // Lifecycle status is DELIBERATELY not touched here.
+      //
+      // This used to promote "unverified" to "operating" on a company's first
+      // successful check. Spec sections 4 and 20 are explicit that automated
+      // signals feed the score, and a human decides the status — a crawler can
+      // see that a site responds, but not whether the company behind it was
+      // acquired, renamed or is a parked shell. The reachability result is
+      // recorded above and shown to admins; promoting it to a verified fact is
+      // their call, in /admin/activity.
     },
   });
+
+  // Score is recomputed across every signal, not just this check.
+  await persistActivityScore(company.id);
 
   return { result, httpStatus };
 }

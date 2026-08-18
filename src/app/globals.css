@@ -4017,3 +4017,32 @@ table.dir tbody tr.is-busy {
 .compare-table td.is-wide { min-width: 240px; white-space: normal; line-height: 1.55; }
 .compare-table tr.is-different td { font-weight: 550; }
 .compare-table a { color: var(--indigo); }
+
+/* ---------- Activity signal weights ---------- */
+.weight-row {
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  gap: var(--s-5);
+  align-items: center;
+  padding: var(--s-4) 0;
+  border-bottom: 1px solid var(--line);
+}
+.weight-row:last-child { border-bottom: none; padding-bottom: 0; }
+.weight-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.weight-desc { font-size: 12.5px; color: var(--ink-soft); margin-top: 4px; line-height: 1.5; }
+.weight-coverage { font-size: 11px; color: var(--muted); margin-top: 5px; }
+.weight-control { display: flex; flex-direction: column; gap: 6px; }
+.weight-control input[type="range"] { width: 100%; accent-color: var(--indigo); }
+.weight-control input[type="range"]:disabled { opacity: 0.4; }
+.weight-value { font-size: 12px; color: var(--ink); }
+.weight-share { color: var(--muted); }
+@media (max-width: 720px) {
+  .weight-row { grid-template-columns: 1fr; gap: var(--s-3); }
+}

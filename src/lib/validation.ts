@@ -230,6 +230,10 @@ export const evidenceActionSchema = z.object({
   action: z.enum(["verify", "unverify", "set-winning", "delete"]),
 });
 
+export const scoreWeightsSchema = z.object({
+  weights: z.record(z.string(), z.coerce.number().min(0).max(1)),
+});
+
 export const claimSubmissionSchema = z.object({
   companySlug: z.string().trim().min(1).max(200),
   claimedRole: z.enum(["owner", "employee", "agency", "other"]),

@@ -121,6 +121,7 @@ export const ACTION_LABELS: Record<string, string> = {
   "evidence.unverify": "Withdrew field verification",
   "evidence.set-winning": "Changed authoritative source",
   "evidence.delete": "Removed evidence",
+  "weights.update": "Changed activity score weights",
 };
 
 export function labelForAction(action: string): string {
@@ -144,7 +145,7 @@ export const ACTION_GROUPS: Record<string, string[]> = {
   ],
   Reviews: ["review.publish", "review.reject", "review.remove", "review.unpublish"],
   Claims: ["claim.approve", "claim.reject", "claim.revoke"],
-  Activity: ["activity.check"],
+  Activity: ["activity.check", "weights.update"],
   Evidence: [
     "evidence.add",
     "evidence.verify",
