@@ -232,6 +232,19 @@ That last behaviour is deliberate. Rendering "Bed capacity: 120 vs —" across a
 
 ## 6. The Activity Intelligence system
 
+**Multi-signal since the section 4 pass.** The score is no longer website-only. It combines five signals we can genuinely observe — website reachability, website content change, customer activity (published reviews), funding recency, and verification freshness — each with a configurable weight at `/admin/activity/weights`.
+
+**The rule the whole thing turns on: a signal we cannot observe scores *nothing*, not zero.** The spec lists social, hiring and news activity; we have no API for any of them. Scoring those zero would quietly drag every listing down and make the number a measure of our integrations rather than of the company. Instead, unobservable signals are excluded and the remaining weights are renormalised across what was actually measured.
+
+**Coverage** (0–1) records what share of the intended signal weight we managed to observe, and is stored on every `Score` row and shown beside every score. A 90 built from one signal is not the same claim as a 90 built from five.
+
+**Minimum floors.** A score is only published when at least two signals were measured *and* coverage reaches 35%. This came directly out of testing: a law firm with no website checks, no reviews and no funding was scoring **100 "booming"** off a single freshness signal at 14% coverage. Below the floors we now publish no score at all — an absent score prompts someone to check, a wrong one gets believed.
+
+**The score never changes a company's status.** This was previously violated: a first successful website check promoted `lifecycleStatus` from "unverified" to "operating". Sections 4 and 20 are explicit that automated signals feed the score and a human decides the status — a crawler can see a site responds, but not whether the company was acquired, renamed, or is a parked shell. That auto-promotion is removed; the result is recorded and shown to admins, and the call is theirs.
+
+Weight changes are audited and are **not retroactive** — each listing picks up new weights the next time it's checked, so a stored score always matches the weights it was computed under (`Score.weightsVersion`).
+
+
 **Now runnable from the UI.** The checker was always real code — genuine outbound HTTP GETs, parked-domain sniffing, content hashing, scores derived only from recorded history. What was missing was any way to run it or see it. `/admin/activity` now lists every listing with its last result, check count and last-checked time, with a "Check now" per listing and a "Run all" button, backed by `POST /api/admin/activity`. The nightly Vercel cron at 06:00 UTC still calls the same function and needs `CRON_SECRET` set.
 
 **Run it after seeding.** Seeded and imported listings arrive `unverified` with no activity score on purpose. `npm run check-activity` (or the admin button) is what confirms their websites resolve. A listing that has never been checked shows no score at all rather than a fabricated one.
@@ -261,8 +274,8 @@ This splits into two genuinely different things:
 - **`hello@indexone.example` on the /about page is a placeholder.** It's the only fake destination left in the app; swap it for a real inbox before launch.
 - ~~No audit log.~~ **Done** — see section 5d.
 - **The audit log starts empty and cannot be backfilled.** Actions taken before it was added were never recorded.
-- **Still unbuilt from the product spec:** activity signals beyond website reachability with admin-configurable weights (§4 — `ScoreWeight` likewise exists unused), entity-aware and natural-language search (§2), and the whole API ingestion / connector / change-detection subsystem (§15–18).
-- **11 schema models still have no application code reading them:** `Product`, `JobPosting`, `NewsItem`, `SocialMetric`, `TrafficEstimate`, `CrawlRun`, `ScoreWeight`, `ListingCorrection`, `ListingCurrentSignal`, `CompanyCategory`, `Award`. (`FieldProvenance`, `DataSource` and `FieldDefinition` are now wired up — see sections 5e and 4.) Some carry seeded sample rows, which makes features look half-built in the database while being entirely absent from the product. They're being wired up as the features that need them get built.
+- **Still unbuilt from the product spec:** entity-aware and natural-language search (§2), and the whole API ingestion / connector / change-detection subsystem (§15–18).
+- **10 schema models still have no application code reading them:** `Product`, `JobPosting`, `NewsItem`, `SocialMetric`, `TrafficEstimate`, `CrawlRun`, `ListingCorrection`, `ListingCurrentSignal`, `CompanyCategory`, `Award`. (`ScoreWeight` and `Score` are now wired up — see section 6.) Several of these are precisely the signals §4 wants but has no source for; connecting one is what turns a dormant signal on. (`FieldProvenance`, `DataSource` and `FieldDefinition` are now wired up — see sections 5e and 4.) Some carry seeded sample rows, which makes features look half-built in the database while being entirely absent from the product. They're being wired up as the features that need them get built.
 - **No email notifications.** Approving or rejecting a submission or claim doesn't tell the submitter anything — you have to contact them yourself.
 - **`ListingCorrection` still has no UI.** The table exists and the schema supports "report this listing as closed / wrong / duplicate", but nothing reads or writes it yet.
 - **No sourcing pipeline.** The 11 companies currently in the database were hand-researched and typed into a seed script once. There's no ongoing process to find, verify, or refresh company data at scale.
