@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminApi } from "@/lib/admin";
 import { moderateCompanySchema } from "@/lib/validation";
+import { diffRecords, recordAudit } from "@/lib/audit";
 import type { Prisma } from "@/generated/prisma/client";
 
 /**
@@ -30,7 +31,10 @@ export async function POST(
     return NextResponse.json({ error: "Unknown action." }, { status: 400 });
   }
 
-  const company = await prisma.company.findUnique({ where: { id }, select: { id: true } });
+  const company = await prisma.company.findUnique({
+    where: { id },
+    select: { id: true, name: true, status: true, verification: true, lastVerifiedAt: true },
+  });
   if (!company) return NextResponse.json({ error: "Company not found." }, { status: 404 });
 
   const now = new Date();
@@ -50,7 +54,20 @@ export async function POST(
   const updated = await prisma.company.update({
     where: { id },
     data: updates[parsed.data.action],
-    select: { id: true, status: true, verification: true },
+    select: { id: true, name: true, status: true, verification: true, lastVerifiedAt: true },
+  });
+
+  // Audit before responding, so a moderation decision can never be visible in
+  // the product without a corresponding entry in the log.
+  await recordAudit({
+    actor: guard.user,
+    action: `company.${parsed.data.action}`,
+    entityType: "Company",
+    entityId: company.id,
+    targetLabel: company.name,
+    changes: diffRecords(company, updated),
+    reason: parsed.data.reason,
+    evidence: parsed.data.evidence,
   });
 
   return NextResponse.json(updated);

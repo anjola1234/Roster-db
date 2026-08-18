@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminApi } from "@/lib/admin";
 import { checkAllCompanies, checkCompanyWebsite } from "@/lib/activityCheck";
+import { recordAudit } from "@/lib/audit";
 
 export const maxDuration = 300;
 
@@ -52,5 +53,19 @@ export async function POST(request: NextRequest) {
   }
 
   const summary = await checkAllCompanies();
+
+  // The full sweep is logged; single checks are not. A per-listing check is
+  // read-only diagnostics an admin runs constantly, and logging each one would
+  // drown the decisions that actually matter. The WebsiteCheck table already
+  // holds the per-listing history.
+  await recordAudit({
+    actor: guard.user,
+    action: "activity.check",
+    entityType: "Company",
+    entityId: "all",
+    targetLabel: `Website sweep across ${summary.total} listing(s)`,
+    summary: `${summary.reachable} reachable, ${summary.unreachable} unreachable, ${summary.parked} parked, ${summary.error} errored`,
+  });
+
   return NextResponse.json({ scope: "all", ...summary });
 }

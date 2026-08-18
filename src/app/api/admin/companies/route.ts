@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/admin";
 import { adminCompanySchema } from "@/lib/validation";
 import { createCompany, resolveTaxonomy } from "@/lib/companyWrite";
+import { recordAudit } from "@/lib/audit";
 
 export async function POST(request: NextRequest) {
   const guard = await requireAdminApi();
@@ -32,6 +33,16 @@ export async function POST(request: NextRequest) {
   if ("error" in result) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }
+
+  await recordAudit({
+    actor: guard.user,
+    action: "company.create",
+    entityType: "Company",
+    entityId: result.company.id,
+    targetLabel: result.company.name,
+    summary: `Created as ${result.company.status}/${result.company.verification} in ${parsed.data.industrySlug}`,
+    reason: parsed.data.source ? `Source: ${parsed.data.source}` : null,
+  });
 
   return NextResponse.json(
     { id: result.company.id, slug: result.company.slug },

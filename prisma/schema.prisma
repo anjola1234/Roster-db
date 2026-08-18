@@ -612,6 +612,7 @@ model User {
   // Granted out-of-band (`npm run make-admin -- email@example.com`), never
   // through signup — nothing in the public API can ever write this field.
   role         String    @default("user")
+  auditLogs    AuditLog[]
   createdAt    DateTime  @default(now())
   sessions     Session[]
   reviews      Review[]
@@ -634,4 +635,51 @@ model NewsletterSubscriber {
   id        String   @id @default(cuid())
   email     String   @unique
   createdAt DateTime @default(now())
+}
+
+/// An append-only record of every consequential admin action.
+///
+/// Section 26 of the product spec makes this the integrity protection for the
+/// whole directory: who changed what, from what, to what, why, and on what
+/// evidence. It is the one thing that cannot be backfilled — a day without it
+/// is a day of history permanently lost — which is why it comes before the
+/// richer intelligence features.
+///
+/// Deliberately denormalised. `actorEmail`, `targetLabel` and the value diff
+/// are snapshotted as text at write time rather than joined at read time, so
+/// the log still reads correctly after the company is deleted or the admin's
+/// account is removed. An audit trail that goes blank when the subject is
+/// deleted is not an audit trail.
+model AuditLog {
+  id String @id @default(cuid())
+
+  // --- who ---
+  actorId    String?
+  actor      User?   @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorEmail String // snapshot; survives account deletion
+
+  // --- what ---
+  action     String // "company.approve", "review.publish", "claim.reject", ...
+  entityType String // "Company" | "Review" | "ListingClaim" | ...
+  entityId   String
+  targetLabel String // snapshot of the human name, e.g. "Julius Berger Nigeria"
+
+  /// Field-level diff: [{ field, from, to }]. Null for actions without one
+  /// (a bulk import, a delete), where `summary` carries the meaning instead.
+  changes Json?
+  summary String?
+
+  // --- why ---
+  /// Free-text justification. The spec's example ("Website unavailable + no
+  /// social activity for 14 months") is exactly this field.
+  reason String?
+  /// Supporting URLs or check references the admin relied on.
+  evidence Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@index([createdAt])
+  @@index([action])
 }

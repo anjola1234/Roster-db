@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdminApi } from "@/lib/admin";
 import { importPayloadSchema, importRowSchema } from "@/lib/validation";
 import { colorFor, initialsFor, uniqueSlug } from "@/lib/companyWrite";
+import { recordAudit } from "@/lib/audit";
 
 export type ImportRowResult = {
   row: number; // 1-based, matching the spreadsheet row the admin is looking at
@@ -127,6 +128,21 @@ export async function POST(request: NextRequest) {
   }
 
   const created = results.filter((r) => r.ok).length;
+
+  // Only a committed import is logged. A dry run writes nothing, so logging it
+  // would fill the trail with entries for actions that never happened.
+  if (mode === "commit" && created > 0) {
+    await recordAudit({
+      actor: guard.user,
+      action: "company.import",
+      entityType: "Company",
+      entityId: "bulk",
+      targetLabel: `${created} listing(s) imported as ${status}`,
+      summary: `${created} created, ${results.length - created} rejected out of ${results.length} rows`,
+      evidence: results.filter((r) => r.ok).map((r) => r.slug),
+    });
+  }
+
   return NextResponse.json({
     mode,
     status,

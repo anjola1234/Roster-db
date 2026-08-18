@@ -9,6 +9,7 @@ import { timeAgo } from "@/lib/format";
 export default function AdminSubmissions({ submissions }: { submissions: AdminCompanyRow[] }) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [reasons, setReasons] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
 
   async function decide(id: string, action: "approve" | "reject") {
@@ -18,7 +19,7 @@ export default function AdminSubmissions({ submissions }: { submissions: AdminCo
       const res = await fetch(`/api/admin/companies/${id}/moderate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action, reason: reasons[id] ?? "" }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -91,6 +92,16 @@ export default function AdminSubmissions({ submissions }: { submissions: AdminCo
               </div>
 
               <div className="admin-queue-actions">
+                <div className="field">
+                  <label htmlFor={`reason-${s.id}`}>Reason (recorded in the audit log)</label>
+                  <input
+                    id={`reason-${s.id}`}
+                    value={reasons[s.id] ?? ""}
+                    onChange={(e) => setReasons((r) => ({ ...r, [s.id]: e.target.value }))}
+                    placeholder="e.g. Website and CAC record both confirm"
+                    maxLength={1000}
+                  />
+                </div>
                 <Link className="btn btn-ghost" href={`/admin/companies/${s.id}`}>
                   Open full form
                 </Link>

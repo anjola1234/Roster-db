@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminApi } from "@/lib/admin";
 import { moderateClaimSchema } from "@/lib/validation";
+import { recordAudit } from "@/lib/audit";
 
 const STATUS_FOR_ACTION = {
   approve: "approved",
@@ -40,7 +41,16 @@ export async function PATCH(
 
   const claim = await prisma.listingClaim.findUnique({
     where: { id },
-    select: { id: true, companyId: true, userId: true, proofMethod: true },
+    select: {
+      id: true,
+      companyId: true,
+      userId: true,
+      proofMethod: true,
+      claimedRole: true,
+      status: true,
+      company: { select: { name: true } },
+      user: { select: { email: true } },
+    },
   });
   if (!claim) return NextResponse.json({ error: "Claim not found." }, { status: 404 });
 
@@ -77,6 +87,20 @@ export async function PATCH(
         data: { status: "expired", note: note ?? null },
       });
     }
+  });
+
+  await recordAudit({
+    actor: guard.user,
+    action: `claim.${action}`,
+    entityType: "ListingClaim",
+    entityId: claim.id,
+    targetLabel: `${claim.user.email} \u2192 ${claim.company.name}`,
+    changes: [{ field: "status", from: claim.status, to: status }],
+    summary:
+      action === "approve"
+        ? `Verification badge issued (claimed role: ${claim.claimedRole}, proof: ${claim.proofMethod}); listing marked verified`
+        : `Claim ${status}; listing verification left unchanged`,
+    reason: note,
   });
 
   return NextResponse.json({ id, status });

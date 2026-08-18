@@ -1,13 +1,17 @@
 import Link from "next/link";
 import { getQueueCounts, getPendingSubmissions, getClaimQueue, getReviewQueue } from "@/lib/adminQueries";
+import { prisma } from "@/lib/prisma";
+import { labelForAction } from "@/lib/audit";
 import { timeAgo } from "@/lib/format";
 
 export default async function AdminOverviewPage() {
-  const [counts, submissions, claims, reviews] = await Promise.all([
+  const [counts, submissions, claims, reviews, recentActions] = await Promise.all([
     getQueueCounts(),
     getPendingSubmissions(),
     getClaimQueue(),
     getReviewQueue(),
+    // Spec section 11 asks the overview to surface recently changed companies.
+    prisma.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 5 }),
   ]);
 
   const tiles = [
@@ -82,6 +86,28 @@ export default async function AdminOverviewPage() {
                     {r.rating}★ on {r.company.name}
                   </Link>
                   <span className="mono admin-muted">{timeAgo(r.createdAt)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="panel">
+          <div className="admin-panel-head">
+            <h2>Recent admin activity</h2>
+            <Link className="mono admin-muted" href="/admin/audit">
+              Full log →
+            </Link>
+          </div>
+          {recentActions.length === 0 ? (
+            <p className="admin-empty">No admin actions recorded yet.</p>
+          ) : (
+            <ul className="admin-feed">
+              {recentActions.map((a) => (
+                <li key={a.id}>
+                  <span className="pill">{labelForAction(a.action)}</span>
+                  <Link href={`/admin/audit?entity=${a.entityId}`}>{a.targetLabel}</Link>
+                  <span className="mono admin-muted">{timeAgo(a.createdAt)}</span>
                 </li>
               ))}
             </ul>

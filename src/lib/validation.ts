@@ -187,12 +187,22 @@ export const importPayloadSchema = z.object({
   status: z.enum(LISTING_STATUSES).default("draft"),
 });
 
+/** Optional justification and supporting links, per spec section 12. */
+const auditReason = optionalText(1000);
+const auditEvidence = z.preprocess(
+  blankToUndefined,
+  z.array(z.string().trim().max(500)).max(10).optional(),
+);
+
 export const moderateCompanySchema = z.object({
   action: z.enum(["approve", "reject", "verify", "unverify", "flag", "archive", "restore"]),
+  reason: auditReason,
+  evidence: auditEvidence,
 });
 
 export const moderateReviewSchema = z.object({
   action: z.enum(["publish", "reject", "remove", "unpublish"]),
+  reason: auditReason,
 });
 
 export const moderateClaimSchema = z.object({
