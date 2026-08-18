@@ -121,7 +121,13 @@ export async function getFormOptions() {
       include: { children: { orderBy: { name: "asc" } } },
       orderBy: { name: "asc" },
     }),
-    prisma.region.findMany({ where: { level: "state" }, orderBy: { name: "asc" } }),
+    // Every level, not just states. The admin form previously offered states
+    // only, so a listing could never be attached to a country or a city even
+    // though both exist in the taxonomy and the public filters support them.
+    prisma.region.findMany({
+      select: { slug: true, name: true, level: true, parent: { select: { name: true } } },
+      orderBy: [{ level: "asc" }, { name: "asc" }],
+    }),
     prisma.feature.findMany({
       include: { industry: { select: { slug: true, name: true } } },
       orderBy: [{ group: "asc" }, { name: "asc" }],

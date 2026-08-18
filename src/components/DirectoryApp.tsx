@@ -3,10 +3,22 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { schemaForIndustry } from "@/lib/verticalSchemas";
 import { money } from "@/lib/format";
 import ActivityBadge from "@/components/ActivityBadge";
 
-type Industry = { id: string; slug: string; name: string; icon: string | null; accent: string | null; children: { id: string; slug: string; name: string }[] };
+type Industry = {
+  id: string;
+  slug: string;
+  name: string;
+  icon: string | null;
+  accent: string | null;
+  // Drives which extension schema (and therefore which columns, sorts and
+  // labels) this vertical uses. Must be selected by getIndustries or every
+  // schema lookup silently resolves to null.
+  schemaExtension: string | null;
+  children: { id: string; slug: string; name: string; schemaExtension: string | null }[];
+};
 type Region = { slug: string; name: string; level: string; parent: { slug: string; name: string } | null };
 type Feature = { id: string; slug: string; name: string; group: string; industry: { slug: string } };
 
@@ -155,26 +167,29 @@ export default function DirectoryApp({
   const activeIndustry = useMemo(() => industries.find((i) => i.slug === category), [industries, category]);
   const activeFeatures = useMemo(() => features.filter((f) => f.industry.slug === category), [features, category]);
 
-  // Sort options are per-vertical because the underlying columns are. Offering
-  // "Most funded" on law firms or "Most beds" on universities would be a
-  // control that silently does nothing — those columns are null there.
-  const SORTS_BY_VERTICAL: Record<string, [string, string][]> = {
-    healthcare: [
-      ["az", "A - Z"],
-      ["beds", "Most beds"],
-      ["newest", "Newest"],
-    ],
-    fintech: [
-      ["az", "A - Z"],
-      ["funding", "Most funded"],
-      ["newest", "Newest"],
-    ],
-  };
-  const DEFAULT_SORTS: [string, string][] = [
-    ["az", "A - Z"],
-    ["newest", "Newest"],
-  ];
-  const sorts = activeIndustry ? (SORTS_BY_VERTICAL[category] ?? DEFAULT_SORTS) : DEFAULT_SORTS;
+  // Which extension schema the selected vertical uses. Everything below that
+  // used to branch on the literal slugs "fintech" / "healthcare" now branches
+  // on this instead, so the directory adapts to whatever the database says.
+  const activeSchema = useMemo(() => schemaForIndustry(activeIndustry), [activeIndustry]);
+
+  // Sort options come from the schema, because the columns they sort on only
+  // exist there. Offering "Most funded" on law firms would be a control that
+  // silently does nothing.
+  const sorts: [string, string][] = useMemo(() => {
+    const base: [string, string][] = [["az", "A - Z"]];
+    const extra = (activeIndustry && activeSchema?.sorts) || [];
+    return [...base, ...extra, ["newest", "Newest"]];
+  }, [activeIndustry, activeSchema]);
+
+  // The one extra stat shown on the mobile card, likewise schema-driven.
+  const cardExtra = useMemo(() => {
+    const col = activeSchema?.tableColumn;
+    if (!col) return { label: "Region", render: (l: CompanyRow) => regionLabel(l).name };
+    if (col.format === "money") {
+      return { label: col.label, render: (l: CompanyRow) => money(l.totalFunding) };
+    }
+    return { label: col.label, render: (l: CompanyRow) => l.bedCapacity ?? "—" };
+  }, [activeSchema]);
 
   function clearFilters() {
     setRegion("all");
@@ -188,7 +203,7 @@ export default function DirectoryApp({
     setTags((prev) => (prev.includes(slug) ? prev.filter((t) => t !== slug) : [...prev, slug]));
   }
 
-  const columns = columnDefsFor(category);
+  const columns = columnDefsFor(activeSchema?.key ?? null);
 
   return (
     <div className="wrap" style={{ paddingTop: "var(--s-10)", paddingBottom: "var(--s-20)" }}>
@@ -250,7 +265,7 @@ export default function DirectoryApp({
             </select>
           </div>
           <div className="filter-group">
-            <span className="filter-label">{category === "healthcare" ? "Type" : "Sub-vertical"}</span>
+            <span className="filter-label">{activeSchema?.subCategoryLabel ?? "Sub-category"}</span>
             <select className="control" value={subcat} onChange={(e) => setSubcat(e.target.value)} disabled={!activeIndustry}>
               <option value="all">{activeIndustry ? `All ${activeIndustry.name.toLowerCase()}` : "Pick a category first"}</option>
               {activeIndustry?.children.map((c) => (
@@ -343,7 +358,6 @@ export default function DirectoryApp({
           <div className="card-list">
             {rows.map((l) => {
               const rl = regionLabel(l);
-              const vertical = l.industry.parent?.slug ?? l.industry.slug;
               return (
                 <Link key={l.slug} href={`/company/${l.slug}`} className="dir-card" style={{ display: "block" }}>
                   <div className="top">
@@ -363,8 +377,8 @@ export default function DirectoryApp({
                     {l.shortDescription}
                   </div>
                   <div className="row-kv">
-                    <span className="k">{vertical === "healthcare" ? "Beds" : "Capital"}</span>
-                    <span className="mono">{vertical === "healthcare" ? l.bedCapacity ?? "—" : money(l.totalFunding)}</span>
+                    <span className="k">{cardExtra.label}</span>
+                    <span className="mono">{cardExtra.render(l)}</span>
                   </div>
                   <div className="row-kv">
                     <span className="k">Region</span>
@@ -402,8 +416,13 @@ function regionLabel(l: CompanyRow) {
 
 type ColDef = { key: string; label: string };
 
-function columnDefsFor(category: string): ColDef[] {
-  if (category === "fintech") {
+/**
+ * Column layouts are keyed by extension schema, not by vertical slug, so a new
+ * vertical inherits the sensible base layout automatically and a new fintech
+ * sub-category gets the funding layout without a code change.
+ */
+function columnDefsFor(schemaKey: string | null): ColDef[] {
+  if (schemaKey === "fintech_schema") {
     return [
       { key: "entity", label: "Entity" },
       { key: "description", label: "Description" },
@@ -415,7 +434,7 @@ function columnDefsFor(category: string): ColDef[] {
       { key: "explore", label: "" },
     ];
   }
-  if (category === "healthcare") {
+  if (schemaKey === "hospitals_schema") {
     return [
       { key: "entity", label: "Entity" },
       { key: "location", label: "Location" },

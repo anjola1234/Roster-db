@@ -4,6 +4,18 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { FormOptions } from "@/lib/adminQueries";
 import { LIFECYCLE_STATUSES, LISTING_STATUSES, VERIFICATION_STATUSES } from "@/lib/validation";
+import { schemaForIndustry, type ExtensionField, type ExtensionSchema } from "@/lib/verticalSchemas";
+
+/** Groups a schema's fields by their section, preserving declaration order. */
+function sectionsOf(schema: ExtensionSchema): [string, ExtensionField[]][] {
+  const map = new Map<string, ExtensionField[]>();
+  for (const f of schema.fields) {
+    const list = map.get(f.section) ?? [];
+    list.push(f);
+    map.set(f.section, list);
+  }
+  return Array.from(map.entries());
+}
 
 /**
  * Every value is held as a string (or string[]) because that's what form
@@ -126,15 +138,22 @@ export default function AdminCompanyForm({ options, initial, companyId }: Props)
   // Which extension schema applies is a function of the chosen category's
   // parent vertical — the same rule the public company page uses to decide
   // whether to render funding rounds or bed counts.
+  // The selected category's vertical, and the extension schema it resolves to.
   const vertical = useMemo(() => {
     for (const v of options.verticals) {
-      if (v.children.some((c) => c.slug === values.industrySlug)) return v.slug;
+      if (v.children.some((c) => c.slug === values.industrySlug)) return v;
     }
     return null;
   }, [options.verticals, values.industrySlug]);
 
+  const activeSchema = useMemo(() => {
+    if (!vertical) return null;
+    const category = vertical.children.find((c) => c.slug === values.industrySlug);
+    return schemaForIndustry(category ? { ...category, parent: vertical } : vertical);
+  }, [vertical, values.industrySlug]);
+
   const availableTags = useMemo(
-    () => options.features.filter((f) => !vertical || f.industry.slug === vertical),
+    () => options.features.filter((f) => !vertical || f.industry.slug === vertical.slug),
     [options.features, vertical],
   );
 
@@ -304,18 +323,32 @@ export default function AdminCompanyForm({ options, initial, companyId }: Props)
 
         <fieldset className="admin-fieldset">
           <legend>Regions</legend>
-          <div className="admin-checks">
-            {options.regions.map((r) => (
-              <label key={r.slug} className="admin-check">
-                <input
-                  type="checkbox"
-                  checked={values.regionSlugs.includes(r.slug)}
-                  onChange={() => toggleRegion(r.slug)}
-                />
-                {r.name}
-              </label>
-            ))}
-          </div>
+          {/* Grouped by level so countries, states and cities are all
+              attachable. A listing can sit at whatever granularity the data
+              actually supports — country-only for a multinational, city-level
+              for a single clinic. */}
+          {(["country", "state", "city"] as const).map((level) => {
+            const inLevel = options.regions.filter((r) => r.level === level);
+            if (!inLevel.length) return null;
+            return (
+              <div key={level} className="admin-region-group">
+                <p className="admin-region-level">{level}</p>
+                <div className="admin-checks">
+                  {inLevel.map((r) => (
+                    <label key={r.slug} className="admin-check">
+                      <input
+                        type="checkbox"
+                        checked={values.regionSlugs.includes(r.slug)}
+                        onChange={() => toggleRegion(r.slug)}
+                      />
+                      {r.name}
+                      {r.parent ? <span className="admin-muted"> · {r.parent.name}</span> : null}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </fieldset>
 
         {values.regionSlugs.length > 0 && (
@@ -474,210 +507,54 @@ export default function AdminCompanyForm({ options, initial, companyId }: Props)
         </div>
       </section>
 
-      {vertical === "fintech" && (
-        <section className="panel">
-          <h3 className="admin-section-title">Fintech details</h3>
-          <div className="form-row">
-            <div className="field">
-              <label htmlFor="totalFunding">Total funding (USD)</label>
-              <input
-                id="totalFunding"
-                type="number"
-                min={0}
-                step="any"
-                placeholder="170000000"
-                value={values.totalFunding}
-                onChange={(e) => set("totalFunding", e.target.value)}
-              />
-              <p className="field-hint">Raw number, no commas or currency symbol.</p>
-            </div>
-            <div className="field">
-              <label htmlFor="valuation">Valuation (USD)</label>
-              <input
-                id="valuation"
-                type="number"
-                min={0}
-                step="any"
-                value={values.valuation}
-                onChange={(e) => set("valuation", e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="form-row">
-            <div className="field">
-              <label htmlFor="valuationDate">Valuation date</label>
-              <input
-                id="valuationDate"
-                placeholder="2022-05"
-                value={values.valuationDate}
-                onChange={(e) => set("valuationDate", e.target.value)}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="licenses">Licences</label>
-              <input
-                id="licenses"
-                placeholder="Switching, PSSP, MMO"
-                value={values.licenses}
-                onChange={(e) => set("licenses", e.target.value)}
-              />
-              <p className="field-hint">Comma-separated.</p>
-            </div>
-          </div>
-          <p className="admin-note">
-            Funding rounds, investors and founders are separate tables and aren&apos;t editable
-            here yet — use Prisma Studio for those.
-          </p>
-        </section>
-      )}
-
-      {vertical === "healthcare" && (
-        <section className="panel">
-          <h3 className="admin-section-title">Hospital details</h3>
-          <div className="form-row">
-            <div className="field">
-              <label htmlFor="hospitalType">Hospital type</label>
-              <input
-                id="hospitalType"
-                placeholder="Specialist, Teaching, General"
-                value={values.hospitalType}
-                onChange={(e) => set("hospitalType", e.target.value)}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="ownership">Ownership</label>
-              <input
-                id="ownership"
-                placeholder="Private, Federal, State"
-                value={values.ownership}
-                onChange={(e) => set("ownership", e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="form-row">
-            <div className="field">
-              <label htmlFor="yearEstablished">Year established</label>
-              <input
-                id="yearEstablished"
-                type="number"
-                min={1800}
-                max={2100}
-                value={values.yearEstablished}
-                onChange={(e) => set("yearEstablished", e.target.value)}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="bedCapacity">Bed capacity</label>
-              <input
-                id="bedCapacity"
-                type="number"
-                min={0}
-                value={values.bedCapacity}
-                onChange={(e) => set("bedCapacity", e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="form-row">
-            <div className="field">
-              <label htmlFor="emergency">Emergency department</label>
-              <select
-                id="emergency"
-                value={values.emergency}
-                onChange={(e) => set("emergency", e.target.value)}
-              >
-                <option value="">Unknown</option>
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="city">City</label>
-              <input id="city" value={values.city} onChange={(e) => set("city", e.target.value)} />
-            </div>
-          </div>
-
-          <div className="field">
-            <label htmlFor="address">Address</label>
-            <input
-              id="address"
-              value={values.address}
-              onChange={(e) => set("address", e.target.value)}
-            />
-          </div>
-
-          <div className="field">
-            <label htmlFor="services">Services</label>
-            <input
-              id="services"
-              placeholder="Cardiology, Oncology, Maternity"
-              value={values.services}
-              onChange={(e) => set("services", e.target.value)}
-            />
-            <p className="field-hint">Comma-separated.</p>
-          </div>
-
-          <div className="field">
-            <label htmlFor="accreditation">Accreditations</label>
-            <input
-              id="accreditation"
-              placeholder="COHSASA, ISO 9001"
-              value={values.accreditation}
-              onChange={(e) => set("accreditation", e.target.value)}
-            />
-            <p className="field-hint">Comma-separated.</p>
-          </div>
-
-          <div className="form-row">
-            <div className="field">
-              <label htmlFor="accreditationBody">Accreditation body</label>
-              <input
-                id="accreditationBody"
-                value={values.accreditationBody}
-                onChange={(e) => set("accreditationBody", e.target.value)}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="facilityBody">Facility registration body</label>
-              <input
-                id="facilityBody"
-                value={values.facilityBody}
-                onChange={(e) => set("facilityBody", e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="form-row">
-            <div className="field">
-              <label htmlFor="facilityNo">Facility number</label>
-              <input
-                id="facilityNo"
-                value={values.facilityNo}
-                onChange={(e) => set("facilityNo", e.target.value)}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="contactPhone">Contact phone</label>
-              <input
-                id="contactPhone"
-                value={values.contactPhone}
-                onChange={(e) => set("contactPhone", e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="field">
-            <label htmlFor="contactEmail">Contact email</label>
-            <input
-              id="contactEmail"
-              type="email"
-              value={values.contactEmail}
-              onChange={(e) => set("contactEmail", e.target.value)}
-            />
-          </div>
-        </section>
-      )}
+      {/* Vertical-specific fields, rendered from the extension schema that
+          the *database* assigns to the selected category. Adding a category
+          that reuses fintech's fields is a data change, not a code change —
+          and a vertical with no extension simply renders nothing here. */}
+      {activeSchema &&
+        sectionsOf(activeSchema).map(([sectionName, fields]) => (
+          <section className="panel" key={sectionName}>
+            <h3 className="admin-section-title">
+              {activeSchema.label} · {sectionName}
+            </h3>
+            {fields.map((f) => (
+              <div className="field" key={f.column}>
+                <label htmlFor={f.column}>{f.label}</label>
+                {f.type === "boolean" ? (
+                  <select
+                    id={f.column}
+                    value={String(values[f.column as keyof CompanyFormValues] ?? "")}
+                    onChange={(e) => set(f.column as keyof CompanyFormValues, e.target.value)}
+                  >
+                    <option value="">Unknown</option>
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                ) : (
+                  <input
+                    id={f.column}
+                    type={
+                      f.type === "number" || f.type === "currency"
+                        ? "number"
+                        : f.type === "email"
+                          ? "email"
+                          : f.type === "url"
+                            ? "url"
+                            : "text"
+                    }
+                    min={f.min}
+                    max={f.max}
+                    step={f.type === "currency" ? "any" : undefined}
+                    placeholder={f.placeholder}
+                    value={String(values[f.column as keyof CompanyFormValues] ?? "")}
+                    onChange={(e) => set(f.column as keyof CompanyFormValues, e.target.value)}
+                  />
+                )}
+                {f.helpText && <p className="field-hint">{f.helpText}</p>}
+              </div>
+            ))}
+          </section>
+        ))}
 
       <section className="panel">
         <h3 className="admin-section-title">Publishing</h3>

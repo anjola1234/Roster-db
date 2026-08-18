@@ -7,6 +7,7 @@ import ScrollSpyToc from "@/components/ScrollSpyToc";
 import ReviewForm from "@/components/ReviewForm";
 import ActivityBadge from "@/components/ActivityBadge";
 import ClaimListingButton from "@/components/ClaimListingButton";
+import { schemaForIndustry } from "@/lib/verticalSchemas";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 
@@ -45,13 +46,24 @@ function socialIcons(s: unknown) {
   );
 }
 
-function isFintech(company: CompanyFull) {
-  return (company.industry.parent?.slug ?? company.industry.slug) === "fintech";
+/**
+ * Which extension schema this listing uses, resolved from the database rather
+ * than a hardcoded slug comparison. A category inherits its vertical's schema,
+ * so a new fintech sub-category gets funding fields automatically and a new
+ * vertical gets base fields only — both without touching this file.
+ */
+function schemaFor(company: CompanyFull) {
+  return schemaForIndustry(company.industry);
+}
+
+/** Funding history only makes sense for listings that track funding. */
+function tracksFunding(company: CompanyFull) {
+  return schemaFor(company)?.key === "fintech_schema";
 }
 
 function bestForBlock(company: CompanyFull) {
   const tagNames = company.tags.map((t) => t.name).slice(0, 5);
-  if (isFintech(company)) {
+  if (tracksFunding(company)) {
     return {
       a: { h: "Best for", items: ["Everyday payments", "Merchants & agents", "Cross-border senders", "Underbanked users"] },
       b: { h: "What it does well", items: tagNames },
@@ -93,9 +105,15 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
     { id: "overview", num: "01", label: "Overview" },
     { id: "stats", num: "02", label: "Key stats" },
     { id: "website", num: "03", label: "Website" },
-    isFintech(company)
-      ? { id: "funding", num: "04", label: "Funding & investors" }
-      : { id: "clinical", num: "04", label: "Clinical detail" },
+    // Section 04 depends on the listing's schema. A base-only listing (a law
+    // firm, a university) gets no section 04 at all — before this, every
+    // non-fintech listing was handed a "Clinical detail" heading, which was
+    // nonsense for the sectors added after healthcare.
+    ...(tracksFunding(company)
+      ? [{ id: "funding", num: "04", label: "Funding & investors" }]
+      : schemaFor(company)?.key === "hospitals_schema"
+        ? [{ id: "clinical", num: "04", label: "Clinical detail" }]
+        : []),
     { id: "people", num: "05", label: "People" },
     { id: "reviews", num: "06", label: "Ratings & reviews" },
     { id: "source", num: "07", label: "Source & verification" },
@@ -212,7 +230,7 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
             <section className="blk" id="stats">
               <span className="eyebrow">§ 02 / Key stats</span>
               <h3 className="blk-title">At a glance</h3>
-              {isFintech(company) ? (
+              {tracksFunding(company) ? (
                 <div className="stat-grid">
                   <div className="stat">
                     <div className="k">Total funding</div>
@@ -286,7 +304,7 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
                   </span>
                 </div>
                 <div className="kv-row">
-                  <span className="kv-key">{isFintech(company) ? "HQ" : "Address"}</span>
+                  <span className="kv-key">{schemaFor(company)?.addressLabel ?? "Address"}</span>
                   <span className="kv-val">{company.address || primaryRegion?.region.name || "—"}</span>
                 </div>
                 <div className="kv-row">
@@ -330,7 +348,7 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
               </div>
             </section>
 
-            {isFintech(company) ? (
+            {tracksFunding(company) ? (
               <section className="blk" id="funding">
                 <span className="eyebrow">§ 04 / Funding & investors</span>
                 <h3 className="blk-title">Funding history</h3>
@@ -378,7 +396,7 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
                   )}
                 </div>
               </section>
-            ) : (
+            ) : schemaFor(company)?.key === "hospitals_schema" ? (
               <section className="blk" id="clinical">
                 <span className="eyebrow">§ 04 / Clinical detail</span>
                 <h3 className="blk-title">Specialties & accreditation</h3>
@@ -431,7 +449,7 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
                   </div>
                 </div>
               </section>
-            )}
+            ) : null}
 
             <section className="blk" id="people">
               <span className="eyebrow">§ 05 / People</span>

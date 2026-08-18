@@ -3803,3 +3803,15 @@ table.dir tbody tr.is-busy {
   padding-left: 12px;
   border-left: 2px solid var(--line-strong);
 }
+
+/* Region checkbox groups in the admin company form */
+.admin-region-group { margin-bottom: var(--s-4); }
+.admin-region-group:last-child { margin-bottom: 0; }
+.admin-region-level {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}

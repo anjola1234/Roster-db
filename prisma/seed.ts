@@ -162,14 +162,14 @@ type IndustrySeed = {
 };
 
 const INDUSTRIES: IndustrySeed[] = [
-  { slug: "healthcare", name: "Healthcare", level: "vertical", icon: "✚", accent: "#10B981" },
+  { slug: "healthcare", name: "Healthcare", level: "vertical", icon: "✚", accent: "#10B981", schemaExtension: "hospitals_schema" },
   { slug: "hospitals", name: "Hospitals", level: "category", parentSlug: "healthcare", schemaExtension: "hospitals_schema", note: "LAUNCH · pilot = Hospitals in Nigeria" },
   { slug: "clinics", name: "Clinics", level: "category", parentSlug: "healthcare", schemaExtension: "hospitals_schema", note: "reuses hospitals extension" },
   { slug: "pharmacies", name: "Pharmacies", level: "category", parentSlug: "healthcare", schemaExtension: "base only (+ few fields)" },
   { slug: "diagnostic-labs", name: "Diagnostic Labs", level: "category", parentSlug: "healthcare", schemaExtension: "hospitals_schema" },
   { slug: "telemedicine", name: "Telemedicine", level: "category", parentSlug: "healthcare", schemaExtension: "base only" },
 
-  { slug: "fintech", name: "Fintech", level: "vertical", icon: "▲", accent: "#4F46E5" },
+  { slug: "fintech", name: "Fintech", level: "vertical", icon: "▲", accent: "#4F46E5", schemaExtension: "fintech_schema" },
   { slug: "payments", name: "Payments", level: "sub-category", parentSlug: "fintech", schemaExtension: "fintech_schema", note: "LAUNCH" },
   { slug: "lending", name: "Lending", level: "sub-category", parentSlug: "fintech", schemaExtension: "fintech_schema", note: "LAUNCH" },
   { slug: "insurtech", name: "Insurtech", level: "sub-category", parentSlug: "fintech", schemaExtension: "fintech_schema", note: "LAUNCH" },
