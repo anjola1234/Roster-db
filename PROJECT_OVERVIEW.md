@@ -163,6 +163,27 @@ Non-admins are redirected away from `/admin` and get a 403 from every `/api/admi
 
 ---
 
+## 5d. Audit log
+
+Every consequential admin action is recorded in an append-only `AuditLog` table: who did it, to what, what changed field-by-field, why, and on what evidence. This is spec sections 12 and 26, and it was built first among the remaining gaps for one reason — it's the only feature that **cannot be backfilled**. Every day without it is history permanently lost.
+
+Logged actions: company create / update / delete / bulk import, all seven moderation actions (approve, reject, verify, unverify, flag, archive, restore), review publish / reject / remove / unpublish, claim approve / reject / revoke, and full website activity sweeps.
+
+**Design decisions worth knowing:**
+
+- **Logging never breaks the action.** If the audit write fails, the approval still happens and the admin still sees success; the failure goes to the server console. An admin unable to moderate because a logging table is unhappy is worse than a gap in the log.
+- **Snapshots, not joins.** `actorEmail` and `targetLabel` are copied in at write time, so an entry still reads correctly after the company is deleted or the admin's account is removed. `actorId` is `ON DELETE SET NULL` for the same reason — deleting an admin must not erase what they did.
+- **Deletes are logged before the delete**, since afterwards there's no row left to describe.
+- **Dry-run imports are not logged.** They write nothing, so logging them would fill the trail with actions that never happened.
+- **Per-listing activity checks are not logged**, only full sweeps — a single check is read-only diagnostics run constantly, and `WebsiteCheck` already holds that history.
+- Passwords and session tokens are redacted from diffs unconditionally; long values are truncated.
+
+Browse at `/admin/audit`, filter by area, action, or free text across target/admin/reason, and click "history" on any entry for that record's full trail. Nothing in the product edits or deletes entries — a correction is a new entry, not a rewrite.
+
+**One immediate benefit.** The first real edit logged revealed that a partial `PATCH` to the company endpoint silently clears any field it doesn't send (the form always sends everything, so this is correct behaviour — but it was previously invisible). That's the kind of thing the log exists to surface.
+
+---
+
 ## 6. The Activity Intelligence system
 
 **Now runnable from the UI.** The checker was always real code — genuine outbound HTTP GETs, parked-domain sniffing, content hashing, scores derived only from recorded history. What was missing was any way to run it or see it. `/admin/activity` now lists every listing with its last result, check count and last-checked time, with a "Check now" per listing and a "Run all" button, backed by `POST /api/admin/activity`. The nightly Vercel cron at 06:00 UTC still calls the same function and needs `CRON_SECRET` set.
@@ -192,7 +213,10 @@ This splits into two genuinely different things:
 - **Fixed along the way: non-active listings were public.** The public queries in `queries.ts` filtered on `verification` but never on `status`, so every pending public submission was live on the directory the moment it was submitted — the opposite of what this document used to claim. Public reads are now restricted to `status = "active"`. If you have a listing that has quietly gone missing from the directory, check its status in the admin dashboard.
 - **Seeded sector data is researched, not verified.** The engineering, science, legal, education and non-Nigerian listings are real organisations at their real public domains, but the descriptions were written from general knowledge rather than scraped from a primary source. Every one is seeded `unverified`, with no rating, and with funding/valuation/headcount left blank rather than guessed. Run the activity checker and spot-check before treating any of it as authoritative — there's a provenance block in `seed.ts` saying the same thing.
 - **`hello@indexone.example` on the /about page is a placeholder.** It's the only fake destination left in the app; swap it for a real inbox before launch.
-- **No audit log.** Who approved what is captured on the rows themselves (`decidedById`, `verifiedById`, `reviewedById`) but there's no single chronological log of admin actions.
+- ~~No audit log.~~ **Done** — see section 5d.
+- **The audit log starts empty and cannot be backfilled.** Actions taken before it was added were never recorded.
+- **Still unbuilt from the product spec:** evidence/provenance UI (§13, §14 — `FieldProvenance` exists in the schema but nothing reads or writes it), company comparison (§7), activity signals beyond website reachability with admin-configurable weights (§4 — `ScoreWeight` likewise exists unused), entity-aware and natural-language search (§2), and the whole API ingestion / connector / change-detection subsystem (§15–18).
+- **14 schema models have no application code reading them:** `Product`, `JobPosting`, `NewsItem`, `SocialMetric`, `TrafficEstimate`, `CrawlRun`, `ScoreWeight`, `ListingCorrection`, `ListingCurrentSignal`, `CompanyCategory`, `Award`, `FieldDefinition`, `FieldProvenance`, `DataSource`. Some carry seeded sample rows, which makes features look half-built in the database while being entirely absent from the product. They're being wired up as the features that need them get built.
 - **No email notifications.** Approving or rejecting a submission or claim doesn't tell the submitter anything — you have to contact them yourself.
 - **`ListingCorrection` still has no UI.** The table exists and the schema supports "report this listing as closed / wrong / duplicate", but nothing reads or writes it yet.
 - **No sourcing pipeline.** The 11 companies currently in the database were hand-researched and typed into a seed script once. There's no ongoing process to find, verify, or refresh company data at scale.
