@@ -8,6 +8,7 @@ import ReviewForm from "@/components/ReviewForm";
 import ActivityBadge from "@/components/ActivityBadge";
 import ClaimListingButton from "@/components/ClaimListingButton";
 import { schemaForIndustry } from "@/lib/verticalSchemas";
+import { SOURCE_KIND_LABELS, labelForFieldKey } from "@/lib/evidence";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 
@@ -545,6 +546,62 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
                   </span>
                 </div>
               </div>
+
+              {/* Per-field provenance. The four items above describe the
+                  listing as a whole; this describes individual facts, which is
+                  the distinction spec section 29 turns on. Only authoritative
+                  rows appear — losing sources in a conflict stay internal. */}
+              {company.fieldProvenance.length > 0 ? (
+                <>
+                  <table className="src-table">
+                    <thead>
+                      <tr>
+                        <th>Field</th>
+                        <th>Value on record</th>
+                        <th>Source</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {company.fieldProvenance.map((p) => (
+                        <tr key={p.id}>
+                          <td>{labelForFieldKey(p.fieldKey)}</td>
+                          <td className="src-value">{p.valueText}</td>
+                          <td>
+                            {p.sourceUrl ? (
+                              <a href={p.sourceUrl} target="_blank" rel="noopener noreferrer">
+                                {p.source.name} ↗
+                              </a>
+                            ) : (
+                              p.source.name
+                            )}
+                            <span className="src-kind mono">
+                              {SOURCE_KIND_LABELS[p.source.kind] ?? p.source.kind}
+                            </span>
+                          </td>
+                          <td>
+                            {p.verifiedAt ? (
+                              <span className="pill emerald">✔ verified {formatDate(p.verifiedAt)}</span>
+                            ) : (
+                              <span className="pill">source recorded</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="src-note">
+                    &ldquo;Verified&rdquo; means a person checked that value against the source
+                    shown and put their name to it. &ldquo;Source recorded&rdquo; means there is a
+                    citation but nobody has confirmed it — treat those as leads, not facts.
+                  </p>
+                </>
+              ) : (
+                <p className="src-note">
+                  No per-field sources recorded yet. Details on this page come from the listing
+                  itself and haven&apos;t been individually checked against a primary source.
+                </p>
+              )}
             </section>
 
             <section className="blk" id="related" style={{ paddingBottom: 0 }}>

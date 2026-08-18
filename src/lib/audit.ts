@@ -116,6 +116,11 @@ export const ACTION_LABELS: Record<string, string> = {
   "claim.reject": "Rejected ownership claim",
   "claim.revoke": "Revoked ownership claim",
   "activity.check": "Ran website activity check",
+  "evidence.add": "Attached evidence",
+  "evidence.verify": "Verified a field",
+  "evidence.unverify": "Withdrew field verification",
+  "evidence.set-winning": "Changed authoritative source",
+  "evidence.delete": "Removed evidence",
 };
 
 export function labelForAction(action: string): string {
@@ -140,4 +145,11 @@ export const ACTION_GROUPS: Record<string, string[]> = {
   Reviews: ["review.publish", "review.reject", "review.remove", "review.unpublish"],
   Claims: ["claim.approve", "claim.reject", "claim.revoke"],
   Activity: ["activity.check"],
+  Evidence: [
+    "evidence.add",
+    "evidence.verify",
+    "evidence.unverify",
+    "evidence.set-winning",
+    "evidence.delete",
+  ],
 };

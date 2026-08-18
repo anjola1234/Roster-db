@@ -24,6 +24,16 @@ export const companyInclude = {
   fundingRounds: true,
   listingPeople: { include: { person: true } },
   reviews: { where: { status: "published" as const }, orderBy: { createdAt: "desc" as const } },
+  // Evidence behind the facts on the profile (spec sections 13, 14, 24).
+  // Only rows marked authoritative surface publicly — the losing side of a
+  // source conflict is an internal working detail, visible in the admin
+  // evidence screen, not something to publish as though it were competing
+  // truth.
+  fieldProvenance: {
+    where: { isWinning: true },
+    include: { source: { select: { name: true, kind: true } } },
+    orderBy: { fieldKey: "asc" as const },
+  },
 } satisfies Prisma.CompanyInclude;
 
 export type CompanyFull = Prisma.CompanyGetPayload<{ include: typeof companyInclude }>;

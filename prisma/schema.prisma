@@ -412,8 +412,21 @@ model FieldProvenance {
   fetchedAt  DateTime
   isWinning  Boolean    @default(false)
 
+  /// Spec section 14 requires evidence to record who checked it and when, and
+  /// section 29 draws the line this enforces: holding a value (data) and
+  /// citing a source (evidence) is NOT the same as a person confirming it
+  /// (verification). An unverified row is a lead; a verified one is a fact
+  /// somebody put their name to.
+  verifiedById String?
+  verifiedBy   User?     @relation("ProvenanceVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
+  verifiedAt   DateTime?
+  /// Admin's free-text note — what they checked, and any caveat.
+  note         String?
+  createdAt    DateTime  @default(now())
+
   @@index([companyId, fieldKey])
   @@index([sourceId])
+  @@index([verifiedById])
 }
 
 model CrawlRun {
@@ -613,6 +626,7 @@ model User {
   // through signup — nothing in the public API can ever write this field.
   role         String    @default("user")
   auditLogs    AuditLog[]
+  verifiedProvenance FieldProvenance[] @relation("ProvenanceVerifier")
   createdAt    DateTime  @default(now())
   sessions     Session[]
   reviews      Review[]

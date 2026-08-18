@@ -9,6 +9,7 @@
  * slugs) without duplicating anything.
  */
 import "dotenv/config";
+import { LEGACY_KEY_ALIASES } from "../src/lib/evidence";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
@@ -1842,8 +1843,15 @@ async function main() {
     }
 
     // Field provenance — only cited facts.
+    //
+    // Keys are normalised through LEGACY_KEY_ALIASES because the original seed
+    // used snake_case names (`total_funding_raised`) that matched no actual
+    // Company column, so nothing could join evidence back to the value it
+    // supported. `funding_round:*` keys are left alone: they describe a round,
+    // not a column, and labelForFieldKey renders them specially.
     const provenance = FIELD_PROVENANCE.filter((p) => p.slug === l.slug);
-    for (const p of provenance) {
+    for (const raw of provenance) {
+      const p = { ...raw, fieldKey: LEGACY_KEY_ALIASES[raw.fieldKey] ?? raw.fieldKey };
       const existing = await prisma.fieldProvenance.findFirst({
         where: { companyId: company.id, fieldKey: p.fieldKey, sourceId: manualResearchSourceId },
       });

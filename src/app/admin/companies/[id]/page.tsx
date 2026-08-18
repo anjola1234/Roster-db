@@ -85,6 +85,9 @@ export default async function EditCompanyPage({ params }: { params: Promise<{ id
           <p className="admin-lede mono">/company/{company.slug}</p>
         </div>
         <div className="admin-actions-row">
+          <Link className="btn btn-ghost" href={`/admin/companies/${company.id}/evidence`}>
+            Evidence &amp; sources
+          </Link>
           <Link className="btn btn-ghost" href={`/company/${company.slug}`}>
             View public page ↗
           </Link>

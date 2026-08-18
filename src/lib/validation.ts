@@ -210,6 +210,26 @@ export const moderateClaimSchema = z.object({
   note: optionalText(500),
 });
 
+export const evidenceSchema = z.object({
+  fieldKey: z.string().trim().min(1).max(120),
+  valueText: z.string().trim().min(1, "Record the value this evidence supports").max(2000),
+  sourceKey: z.string().trim().min(1, "Pick a source"),
+  sourceUrl: z.preprocess(
+    blankToUndefined,
+    z.string().trim().url("Enter a full URL, e.g. https://example.com").max(500).optional(),
+  ),
+  confidence: z.preprocess(blankToUndefined, z.coerce.number().min(0).max(1).optional()),
+  note: optionalText(1000),
+  /** Marks this the value the directory should treat as authoritative. */
+  isWinning: z.preprocess((v) => v === true || v === "true", z.boolean().optional()),
+  /** Confirms it personally — records the admin and timestamp against it. */
+  verifyNow: z.preprocess((v) => v === true || v === "true", z.boolean().optional()),
+});
+
+export const evidenceActionSchema = z.object({
+  action: z.enum(["verify", "unverify", "set-winning", "delete"]),
+});
+
 export const claimSubmissionSchema = z.object({
   companySlug: z.string().trim().min(1).max(200),
   claimedRole: z.enum(["owner", "employee", "agency", "other"]),

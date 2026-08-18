@@ -3859,3 +3859,50 @@ table.dir tbody tr.is-busy {
   margin-right: 8px;
 }
 .audit-evidence a { color: var(--indigo); }
+
+/* ---------- Per-field sources on the public profile ---------- */
+.src-table { width: 100%; border-collapse: collapse; margin-top: var(--s-5); font-size: 13px; }
+.src-table th {
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.src-table td { padding: 10px 12px 10px 0; border-bottom: 1px solid var(--line); vertical-align: top; color: var(--ink-soft); }
+.src-table tr:last-child td { border-bottom: none; }
+.src-table a { color: var(--indigo); }
+.src-value { max-width: 30ch; word-break: break-word; }
+.src-kind { display: block; font-size: 10.5px; color: var(--muted); margin-top: 3px; }
+.src-note {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin-top: var(--s-4);
+  padding-left: 12px;
+  border-left: 2px solid var(--line-strong);
+}
+
+/* ---------- Admin evidence rows ---------- */
+.evidence-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--s-4);
+  padding: var(--s-4) 0;
+  border-bottom: 1px solid var(--line);
+}
+.evidence-row:last-child { border-bottom: none; padding-bottom: 0; }
+.evidence-row.is-winning { background: linear-gradient(90deg, var(--indigo-soft), transparent 60%); }
+.evidence-value { font-size: 14px; font-weight: 550; color: var(--ink); word-break: break-word; }
+.evidence-meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.evidence-link { display: block; font-size: 11.5px; color: var(--indigo); margin-top: 4px; word-break: break-all; }
+.evidence-note { font-size: 12.5px; color: var(--ink-soft); margin-top: 6px; }
+.evidence-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.evidence-actions { display: flex; flex-direction: column; gap: 4px; min-width: 150px; }
+@media (max-width: 720px) {
+  .evidence-row { grid-template-columns: 1fr; }
+  .evidence-actions { flex-direction: row; flex-wrap: wrap; min-width: 0; }
+}
