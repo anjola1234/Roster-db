@@ -347,6 +347,12 @@ model WebsiteCheck {
   lighthousePerf  Int?
   errorNote       String?
   result          String // "reachable" | "unreachable" | "parked" | "error"
+  /// Hash of the fetched page body at the time of this check. Company holds
+  /// only the latest hash, which is enough to detect "changed since last
+  /// time" but not to say anything about a trend. Storing it per check makes
+  /// the website-content signal measurable over a window instead of a single
+  /// step, and lets it honestly report "not measured" until two checks exist.
+  contentHash     String?
 
   @@index([companyId, checkedAt])
 }
