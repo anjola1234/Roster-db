@@ -35,7 +35,15 @@ The user journey it's built around: **Discover → Explore → Understand → Co
 3. That data gets handed to React, which renders the table/page.
 4. The page is sent to the browser already built — no separate "loading..." spinner-then-fetch step for the main content.
 
-**When someone submits something** (a review, a new company listing, a signup) — it's the reverse: the browser sends the form data to an API route, which validates it, checks it's not spam (rate limiting), and writes it to the database.
+**When someone submits something** (a review, a new company listing, a claim) — it's the reverse: the browser sends the form data to an API route, which validates it, rate-limits it, and writes it to the database **in a pending state**. Nothing a member of the public submits appears on the site until an admin approves it:
+
+| Submitted | Lands as | Becomes public when |
+|---|---|---|
+| Company via `/list-your-product` | `status: "pending"` | an admin approves it in `/admin/submissions` |
+| Review on a company page | `status: "pending"` | an admin publishes it in `/admin/reviews` |
+| Ownership claim on a listing | `status: "pending"` | an admin approves it in `/admin/claims` |
+
+Signups are the exception — an account is created immediately, but a plain account can do nothing except write reviews (which are themselves queued) and claim a listing. Admin rights are never granted through any HTTP endpoint; see section 5b.
 
 ---
 
@@ -44,9 +52,9 @@ The user journey it's built around: **Discover → Explore → Understand → Co
 Everything lives in one Postgres database. The core entities:
 
 - **Company** — the actual listings (OPay, Reddington Hospital, etc.). Has a big shared set of fields (name, description, website, status) plus industry-specific fields that only apply to one vertical (e.g. `bedCapacity` for hospitals, `totalFunding` for fintechs — these sit empty/null for the other type).
-- **Industry** — the categories. "Fintech" and "Healthcare" are top-level; "Payments," "Lending," "Specialist," "Teaching" etc. are sub-categories underneath them.
-- **Region** — the 5 Nigerian states currently covered (Lagos, Abuja, Rivers, Oyo, Kano). This is a **Nigeria-only pilot** — we deliberately don't claim broader coverage we don't have.
-- **Feature** — the tag taxonomy used for filtering (e.g. "Cross-Border," "Cardiology"). 17 tags currently.
+- **Industry** — the categories, as a two-level tree. Six verticals are live (Fintech, Healthcare, Engineering & Construction, Science & Research, Legal, Education) with 34 categories under them. `Industry.schemaExtension` names which set of extra fields a vertical uses, and categories inherit it from their parent — this is what the app reads, so the tree is data, not code.
+- **Region** — a three-level tree: country > state/province > city. Six countries (Nigeria, Ghana, Kenya, South Africa, Egypt, Rwanda), 49 states/provinces and 37 cities. Filtering is hierarchical, so selecting a country matches every listing beneath it. Coverage is still heavily Nigeria-weighted (30 of 36 listings) and the directory should say so rather than imply even coverage.
+- **Feature** — the tag taxonomy used for filtering (e.g. "Cross-Border," "Cardiology"). Tags are scoped to a vertical, so the tag list narrows once a category is chosen.
 - **Investor** / **FundingRound** — who's funded which fintech companies, and the actual round history.
 - **Person** — founders/leadership on record per company.
 - **Review** — real written reviews (author, rating, title, body) tied to a company.
@@ -54,7 +62,18 @@ Everything lives in one Postgres database. The core entities:
 - **NewsletterSubscriber** — footer email signups.
 - **ActivityCheck** *(new)* — a log of real website-reachability checks, explained in section 6.
 
-**Important nuance for anyone touching this:** we did **not** build a fully generic "any category can have any custom field" system. Fintech-specific and hospital-specific fields are hardcoded columns on the `Company` table. That's simpler and faster today, but it means **adding a brand-new category (e.g. "Restaurants") requires an engineer** to add new columns and a bit of code — it's not something anyone can configure through the app itself yet. (Adding a category with *no* special fields — just name/description/region — can actually be done today without code, via Prisma Studio; see section 8.)
+**Important nuance for anyone touching this:** the vertical-specific columns (`bedCapacity`, `totalFunding`, …) really are physical columns on `Company` — we did **not** build a generic "any category can have any custom field" system. But which listings *use* those columns is now decided by data, not code. `src/lib/verticalSchemas.ts` maps a `schemaExtension` value to a set of fields, and everything that used to branch on a hardcoded slug — the admin form's extra sections, the public profile's section 04, the directory's columns and sort options — reads from it.
+
+What that means in practice:
+
+| You want to… | Effort |
+|---|---|
+| Add a vertical or category with no special fields | **Data only.** Add a row to `INDUSTRIES` in the seed (or via the admin/Prisma Studio). No code. |
+| Add a category that reuses an existing field set | **Data only.** Set `schemaExtension: "fintech_schema"`. No code. |
+| Add a country, state or city | **Data only.** Add a row to `REGIONS`. Filters, admin form and directory pick it up. |
+| Add a vertical needing genuinely new fields | **Migration + one entry** in `verticalSchemas.ts`. Still not configurable through the app. |
+
+The last row is the real remaining limit, and it's deliberate: a field has to exist as a column before anything can store it.
 
 ---
 
@@ -185,17 +204,24 @@ This splits into two genuinely different things:
 
 ## 8. Practical how-tos
 
-**Run it locally:**
+**Run it locally:** requires Node 20.19+ or 22.12+ (Prisma 7's floor — see `.nvmrc`).
 ```bash
-cd roster-db
 npm install
-# create a .env file with a real DATABASE_URL (ask whoever set up Neon) and a SESSION_SECRET
+# create .env with a real DATABASE_URL and a SESSION_SECRET
 npx prisma generate
-npx prisma migrate deploy
+npx prisma migrate deploy   # use the DIRECT Neon URL, not the -pooler one
+npx prisma db seed          # migrations do NOT seed; this is a separate step
 npm run dev
 ```
 
-**Add a new category without code** (basic fields only): run `npx prisma studio`, open the `Industry` table, add a row (set `parentId` empty for a top-level vertical, or point it at an existing one to nest it as a sub-category).
+*Two things that bite people here.* `prisma migrate deploy` fails with a P1002 advisory-lock timeout against Neon's pooled endpoint — run it against the direct (non-`-pooler`) host. And `migrate deploy` only changes schema; if the directory looks empty or stale, you haven't run `db seed`.
+
+**Add a category, vertical, country, state or city — no code:**
+1. Add the row to `INDUSTRIES` or `REGIONS` in `prisma/seed.ts` and re-run `npx prisma db seed` (upserts, so it's safe to re-run and won't touch user data), or add it directly via `npx prisma studio`.
+2. For an industry, set `schemaExtension` to inherit an existing field set (`"fintech_schema"`, `"hospitals_schema"`) or leave it null / `"base only"` for name-description-region listings.
+3. Nothing else. The directory tabs, filters, region picker, public submission form and admin company form all read the taxonomy from the database.
+
+Adding a vertical that needs *genuinely new* fields is the one case that still needs an engineer — see the table in section 4.
 
 **Manually run the website activity check:** `npm run check-activity`
 
